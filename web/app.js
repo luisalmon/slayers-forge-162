@@ -1,0 +1,540 @@
+// Buildcrafter de Dauntless 1.6.2: constructor de builds, buscador por ventajas y lista de ventajas.
+// Lee window.DATOS (datos/datos.js, generado por extractor/generar.py). Sin servidor ni dependencias.
+'use strict';
+
+const D = window.DATOS;
+const $ = (s, el = document) => el.querySelector(s);
+const PIEZAS = Object.fromEntries(D.piezas.map(p => [p.id, p]));
+const RANURAS = [
+  ['arma', 'Arma'], ['yelmo', 'Yelmo'], ['pecho', 'Pecho'], ['brazos', 'Brazos'], ['piernas', 'Piernas'], ['farol', 'Farol'],
+];
+const ORDEN_TIPO = ['Power', 'Technique', 'Defence', 'Mobility', 'Utility'];
+const MAX_CELULA = 3;
+
+function el(tag, attrs = {}, ...hijos) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const h of hijos.flat()) if (h != null && h !== false) e.append(h.nodeType ? h : document.createTextNode(h));
+  return e;
+}
+const img = (f, alt = '', clase) => f ? el('img', {src: 'iconos/' + f, alt, loading: 'lazy', class: clase}) : el('span');
+const tipoIcono = t => img((D.tipos[t] || {}).icono, (D.tipos[t] || {}).nombre || t, 'ico-tipo');
+const nombreTipo = t => (D.tipos[t] || {}).nombre || t;
+const ventaja = k => D.ventajas[k];
+const normal = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// ------------------------------------------------------------------------------------------------ estado
+
+let build = vacio();
+
+function vacio() {
+  return Object.fromEntries(RANURAS.map(([r]) => [r, null]));
+}
+
+function equipar(ranura, id) {
+  const p = PIEZAS[id];
+  if (!p) { build[ranura] = null; return; }
+  const previo = build[ranura];
+  const mismo = previo && previo.id === id;
+  build[ranura] = {
+    id,
+    celulas: p.huecos.map((_, i) => (mismo ? previo.celulas[i] : null) || null),
+    partes: (p.partes || []).map((s, i) => (mismo ? previo.partes[i] : null) || s.defecto || ''),
+    union: mismo ? previo.union || '' : '',
+  };
+}
+
+// Arma unida a una legendaria (Union): le da su ventaja fija y su efecto unico.
+const unida = e => e && e.union && PIEZAS[e.id].union && PIEZAS[e.id].union.includes(e.union) ? PIEZAS[e.union] : null;
+
+// Enlace: #b= seis ranuras separadas por "|": id~celula,celula~parte,parte~arma unida
+function codificar() {
+  return RANURAS.map(([r]) => {
+    const e = build[r];
+    if (!e) return '';
+    const cel = e.celulas.map(c => c ? `${c.k}.${c.r}` : '-').join(',');
+    return `${e.id}~${cel}~${e.partes.join(',')}` + (e.union ? `~${e.union}` : '');
+  }).join('|');
+}
+
+function decodificar(texto) {
+  const b = vacio();
+  const trozos = texto.split('|');
+  RANURAS.forEach(([r], i) => {
+    const t = trozos[i];
+    if (!t) return;
+    const [id, cel = '', par = '', union = ''] = t.split('~');
+    const p = PIEZAS[id];
+    if (!p) return;
+    const celulas = cel.split(',');
+    const partes = par.split(',');
+    b[r] = {
+      id,
+      celulas: p.huecos.map((_, j) => {
+        const [k, rr] = (celulas[j] || '-').split('.');
+        return ventaja(k) ? {k, r: Math.min(MAX_CELULA, Math.max(1, +rr || MAX_CELULA))} : null;
+      }),
+      partes: (p.partes || []).map((s, j) => partes[j] || s.defecto || ''),
+      union: p.union && p.union.includes(union) ? union : '',
+    };
+  });
+  return b;
+}
+
+function guardar() {
+  const h = codificar();
+  history.replaceState(null, '', h.replace(/\|/g, '') ? '#b=' + encodeURIComponent(h) : location.pathname);
+}
+
+// ------------------------------------------------------------------------------------------------ totales
+
+function totales(b) {
+  const t = {};
+  for (const [r] of RANURAS) {
+    const e = b[r];
+    if (!e) continue;
+    const p = PIEZAS[e.id];
+    const u = unida(e);
+    for (const fuente of [p, u]) if (fuente) for (const [k, n] of Object.entries(fuente.ventajas)) t[k] = (t[k] || 0) + n;
+    for (const c of e.celulas) if (c) t[c.k] = (t[c.k] || 0) + c.r;
+  }
+  return t;
+}
+
+// ------------------------------------------------------------------------------------------------ constructor
+
+function pintarConstructor() {
+  const cont = $('#ranuras');
+  cont.replaceChildren();
+  for (const [r, etiqueta] of RANURAS) cont.append(pintarRanura(r, etiqueta));
+  pintarResumen();
+  guardar();
+}
+
+function chipsVentajas(p) {
+  return Object.entries(p.ventajas).map(([k, n]) => {
+    const v = ventaja(k);
+    return v ? el('span', {class: `chip tipo-${v.tipo}`}, tipoIcono(v.tipo), `${v.nombre} +${n}`) : null;
+  });
+}
+
+function pintarRanura(r, etiqueta) {
+  const e = build[r];
+  const p = e && PIEZAS[e.id];
+  const abrir = () => abrirSelectorPieza(r);
+  const caja = el('div', {class: 'ranura'},
+    el('button', {class: 'icono', title: 'Elegir ' + etiqueta.toLowerCase(), onclick: abrir}, p ? img(p.icono, p.nombre) : '+'));
+  const info = el('div', {});
+  info.append(el('div', {class: 'etiqueta-ranura'}, etiqueta + (p && p.arma ? ' · ' + D.armas[p.arma] : '')));
+  if (!p) {
+    info.append(el('div', {class: 'vacia nombre', onclick: abrir}, 'Sin equipar (pulsa para elegir)'));
+    caja.append(info);
+    return caja;
+  }
+  info.append(el('div', {class: 'lineas'},
+    el('span', {class: `nombre rareza-${p.rareza}`, onclick: abrir}, p.nivel ? `${p.nombre} +${p.nivel}` : p.nombre),
+    p.elemento ? el('span', {class: `elemento ${p.elemento}`}, p.elemento) : null,
+    el('button', {class: 'boton secundario mini', onclick: () => { build[r] = null; pintarConstructor(); }}, 'Quitar')));
+  const lv = el('div', {class: 'lineas'}, chipsVentajas(p));
+  if (lv.childElementCount) info.append(lv);
+  if (p.union) {
+    const u = unida(e);
+    info.append(el('div', {class: 'lineas'},
+      el('span', {class: 'chip legendaria'}, 'Legendaria'),
+      el('button', {class: `hueco ${u ? 'lleno' : ''}`, title: 'Arma unida: da su ventaja y su efecto único', onclick: () => abrirSelectorUnion(r)},
+        u ? img(u.icono, u.nombre, 'ico-tipo') : null, u ? `Unión: ${u.nombre}` : 'Unión: elegir arma'),
+      u ? chipsVentajas(u) : null));
+  }
+  if (p.huecos.length) {
+    const hs = el('div', {class: 'lineas'});
+    p.huecos.forEach((t, i) => {
+      const c = e.celulas[i];
+      const v = c && ventaja(c.k);
+      hs.append(el('button', {class: `hueco ${v ? 'lleno' : ''} tipo-${v ? v.tipo : t}`, title: 'Hueco de ' + nombreTipo(t),
+        onclick: () => abrirSelectorCelula(r, i, t)},
+        tipoIcono(v ? v.tipo : t), v ? `${v.nombre} +${c.r}` : t === 'Any' ? 'Célula prismática (cualquiera)' : `Célula de ${nombreTipo(t).toLowerCase()}`));
+    });
+    info.append(hs);
+  }
+  if (p.partes && p.partes.length) {
+    const ps = el('div', {class: 'lineas'});
+    p.partes.forEach((s, i) => {
+      const sel = el('select', {disabled: s.bloqueada, onchange: ev => { e.partes[i] = ev.target.value; pintarConstructor(); }});
+      const ops = [...new Set([s.defecto, ...s.opciones].filter(Boolean))];
+      if (!s.defecto) sel.append(el('option', {value: ''}, '— ninguna —'));
+      for (const id of ops) sel.append(el('option', {value: id, selected: e.partes[i] === id}, D.partes[id].nombre));
+      ps.append(el('label', {class: 'parte'}, s.tipo + ':', sel));
+    });
+    info.append(ps);
+  }
+  caja.append(info);
+  return caja;
+}
+
+function pintarResumen() {
+  const t = totales(build);
+  const cont = $('#resumen');
+  cont.replaceChildren();
+  const claves = Object.keys(t).filter(k => ventaja(k) && t[k] > 0)
+    .sort((a, b) => t[b] - t[a] || ventaja(a).nombre.localeCompare(ventaja(b).nombre));
+  if (!claves.length) cont.append(el('p', {class: 'vacio'}, 'Equipa piezas y células para ver sus ventajas.'));
+  for (const k of claves) {
+    const v = ventaja(k);
+    const n = Math.min(t[k], v.max);
+    const barras = el('span', {class: 'barras'});
+    for (let i = 1; i <= v.max; i++) barras.append(el('i', {class: i <= n ? 'on' : ''}));
+    const textos = v.rangos[n - 1] || [];
+    cont.append(el('div', {class: `ventaja-total tipo-${v.tipo}`},
+      el('div', {class: 'cab'}, tipoIcono(v.tipo), el('b', {}, v.nombre), barras,
+        el('span', {class: 'rango'}, '+' + n), t[k] > v.max ? el('span', {class: 'exceso'}, `(${t[k] - v.max} de sobra)`) : null),
+      textos.length ? el('ul', {}, textos.map(x => el('li', {}, x))) : null));
+  }
+  const ef = $('#efectos');
+  ef.replaceChildren();
+  for (const [r, etiqueta] of RANURAS) {
+    const e = build[r];
+    if (!e) continue;
+    const p = PIEZAS[e.id];
+    for (const x of p.efectos) ef.append(el('p', {}, el('span', {class: 'origen'}, p.nombre + ': '), x));
+    const u = unida(e);
+    if (u) for (const x of u.efectos) ef.append(el('p', {}, el('span', {class: 'origen'}, `Unión · ${u.nombre}: `), x));
+    if (p.instantaneo) ef.append(el('p', {}, el('span', {class: 'origen'}, p.nombre + ' (pulsar): '), p.instantaneo));
+    if (p.mantenido) ef.append(el('p', {}, el('span', {class: 'origen'}, p.nombre + ' (mantener): '), p.mantenido));
+    (p.partes || []).forEach((s, i) => {
+      const parte = D.partes[e.partes[i]];
+      if (parte && parte.desc) ef.append(el('p', {}, el('span', {class: 'origen'}, `${s.tipo} · ${parte.nombre}: `), parte.desc));
+    });
+  }
+  if (!ef.childElementCount) ef.append(el('p', {class: 'vacio'}, 'Sin efectos únicos.'));
+}
+
+// ------------------------------------------------------------------------------------------------ selector
+
+const dlg = $('#selector');
+let filtrarSelector = () => {};
+
+function abrirSelector(titulo, pintar, armas) {
+  $('#sel-titulo').textContent = titulo;
+  $('#sel-filtro').value = '';
+  const selArma = $('#sel-arma');
+  selArma.hidden = !armas;
+  filtrarSelector = () => pintar(normal($('#sel-filtro').value), selArma.value);
+  filtrarSelector();
+  dlg.showModal();
+  $('#sel-filtro').focus();
+}
+$('#sel-filtro').addEventListener('input', () => filtrarSelector());
+$('#sel-arma').addEventListener('change', () => filtrarSelector());
+
+function textoPieza(p) {
+  const vs = Object.keys(p.ventajas).map(k => (ventaja(k) || {}).nombre || '').join(' ');
+  return normal(`${p.nombre} ${vs} ${p.efectos.join(' ')} ${p.elemento}`);
+}
+
+function abrirSelectorPieza(r) {
+  const actual = build.arma && PIEZAS[build.arma.id];
+  const selArma = $('#sel-arma');
+  if (r === 'arma') {
+    selArma.replaceChildren(el('option', {value: ''}, 'Todas las armas'),
+      ...Object.entries(D.armas).map(([k, n]) => el('option', {value: k, selected: actual && actual.arma === k}, n)));
+  }
+  const etiqueta = RANURAS.find(x => x[0] === r)[1];
+  abrirSelector('Elegir ' + etiqueta.toLowerCase(), (q, arma) => {
+    const lista = $('#sel-lista');
+    lista.replaceChildren();
+    const ps = D.piezas.filter(p => p.ranura === r && (!arma || p.arma === arma) && (!q || textoPieza(p).includes(q)))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    for (const p of ps) {
+      const sub = [
+        p.arma ? D.armas[p.arma] : null,
+        p.union ? 'Legendaria (con unión)' : p.exotica ? 'Exótica' : null,
+        Object.entries(p.ventajas).map(([k, n]) => `${(ventaja(k) || {}).nombre} +${n}`).join(', ') || null,
+        p.huecos.length ? 'Huecos: ' + p.huecos.map(nombreTipo).join(', ') : 'Sin huecos',
+        p.elemento,
+      ].filter(Boolean).join(' · ');
+      lista.append(el('button', {class: 'opcion', onclick: () => { equipar(r, p.id); dlg.close(); pintarConstructor(); }},
+        img(p.icono, p.nombre),
+        el('div', {}, el('div', {class: `rareza-${p.rareza}`}, el('b', {}, p.nombre)), el('div', {class: 'sub'}, sub),
+          p.efectos.length ? el('div', {class: 'sub'}, p.efectos[0]) : null)));
+    }
+    if (!ps.length) lista.append(el('p', {class: 'vacio'}, 'Nada coincide.'));
+  }, r === 'arma');
+}
+
+function abrirSelectorUnion(r) {
+  const p = PIEZAS[build[r].id];
+  abrirSelector(`Unión de ${p.nombre}`, q => {
+    const lista = $('#sel-lista');
+    lista.replaceChildren(el('p', {class: 'ayuda'}, 'La legendaria hereda la ventaja fija y el efecto único del arma unida (no sus huecos).'),
+      el('button', {class: 'opcion', onclick: () => { build[r].union = ''; dlg.close(); pintarConstructor(); }},
+        el('span'), el('div', {}, el('b', {}, 'Sin unión'))));
+    const ws = p.union.map(id => PIEZAS[id]).filter(w => w && (!q || textoPieza(w).includes(q)))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    for (const w of ws) {
+      const vs = Object.entries(w.ventajas).map(([k, n]) => `${(ventaja(k) || {}).nombre} +${n}`).join(', ');
+      lista.append(el('button', {class: 'opcion', onclick: () => { build[r].union = w.id; dlg.close(); pintarConstructor(); }},
+        img(w.icono, w.nombre),
+        el('div', {}, el('div', {class: `rareza-${w.rareza}`}, el('b', {}, w.nombre)), el('div', {class: 'sub'}, vs || 'Sin ventaja fija'),
+          w.efectos.length ? el('div', {class: 'sub'}, w.efectos.join(' · ')) : null)));
+    }
+  }, false);
+}
+
+function abrirSelectorCelula(r, i, tipo) {
+  abrirSelector(tipo === 'Any' ? 'Célula para el hueco prismático' : `Célula para el hueco de ${nombreTipo(tipo).toLowerCase()}`, q => {
+    const lista = $('#sel-lista');
+    lista.replaceChildren(el('button', {class: 'opcion', onclick: () => { build[r].celulas[i] = null; dlg.close(); pintarConstructor(); }},
+      el('span'), el('div', {}, el('b', {}, 'Vaciar hueco'))));
+    const tipos = tipo === 'Any' ? ORDEN_TIPO : [tipo];
+    for (const t of tipos) {
+      const vs = Object.entries(D.ventajas).filter(([k, v]) => v.tipo === t && Object.keys(v.celulas).length &&
+        (!q || normal(v.nombre + ' ' + v.rangos.flat().join(' ')).includes(q)))
+        .sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
+      if (!vs.length) continue;
+      if (tipos.length > 1) lista.append(el('div', {class: `grupo-tipo tipo-${t}`}, nombreTipo(t)));
+      for (const [k, v] of vs) {
+        const fila = el('div', {class: 'opcion', tabindex: 0},
+          tipoIcono(t),
+          el('div', {}, el('b', {}, v.nombre), el('div', {class: 'sub'}, (v.rangos[2] || v.rangos[0] || [])[0] || ''),
+            el('div', {class: 'lineas'}, [1, 2, 3].filter(n => v.celulas[n]).map(n =>
+              el('button', {class: 'boton mini' + (n < MAX_CELULA ? ' secundario' : ''),
+                onclick: ev => { ev.stopPropagation(); build[r].celulas[i] = {k, r: n}; dlg.close(); pintarConstructor(); }}, '+' + n)))));
+        fila.addEventListener('click', () => { build[r].celulas[i] = {k, r: MAX_CELULA}; dlg.close(); pintarConstructor(); });
+        lista.append(fila);
+      }
+    }
+  }, false);
+}
+
+// ------------------------------------------------------------------------------------------------ buscador
+
+const deseo = {};   // ventaja -> rango buscado
+
+function pintarListaBuscador() {
+  const q = normal($('#b-filtro').value);
+  const cont = $('#b-ventajas');
+  cont.replaceChildren();
+  const claves = Object.keys(D.ventajas)
+    .filter(k => !q || normal(D.ventajas[k].nombre).includes(q) || deseo[k])
+    .sort((a, b) => ORDEN_TIPO.indexOf(D.ventajas[a].tipo) - ORDEN_TIPO.indexOf(D.ventajas[b].tipo) ||
+      D.ventajas[a].nombre.localeCompare(D.ventajas[b].nombre));
+  for (const k of claves) {
+    const v = D.ventajas[k];
+    const sel = el('select', {'aria-label': v.nombre, onchange: ev => {
+      const n = +ev.target.value;
+      if (n) deseo[k] = n; else delete deseo[k];
+      ev.target.closest('.fila-ventaja').classList.toggle('activa', !!n);
+    }});
+    for (let n = 0; n <= v.max; n++) sel.append(el('option', {value: n, selected: (deseo[k] || 0) === n}, n ? '+' + n : '—'));
+    cont.append(el('div', {class: `fila-ventaja tipo-${v.tipo} ${deseo[k] ? 'activa' : ''}`, title: (v.rangos[v.max - 1] || []).join('\n')},
+      tipoIcono(v.tipo), el('span', {class: 'nom'}, v.nombre), sel));
+  }
+}
+
+// Reparte células +3 en los huecos: cada ventaja que falta necesita ceil(falta/3) huecos de su tipo o prismáticos.
+function reparto(falta, huecos) {
+  const libres = {};
+  for (const h of huecos) libres[h] = (libres[h] || 0) + 1;
+  let prisma = libres.Any || 0;
+  const asignado = [];
+  for (const [k, n] of Object.entries(falta)) {
+    if (n <= 0) continue;
+    let necesita = Math.ceil(n / MAX_CELULA);
+    const t = D.ventajas[k].tipo;
+    const usa = Math.min(libres[t] || 0, necesita);
+    libres[t] = (libres[t] || 0) - usa;
+    necesita -= usa;
+    for (let i = 0; i < usa; i++) asignado.push([t, k]);
+    if (necesita > prisma) return null;
+    prisma -= necesita;
+    for (let i = 0; i < necesita; i++) asignado.push(['Any', k]);
+  }
+  return asignado;
+}
+
+function buscar() {
+  const objetivo = Object.entries(deseo).filter(([, n]) => n > 0);
+  const out = $('#b-resultados');
+  out.replaceChildren();
+  if (!objetivo.length) { out.append(el('p', {class: 'vacio'}, 'Elige al menos una ventaja.')); return; }
+  const arma = $('#b-arma').value;
+  const exoticas = $('#b-exoticas').checked;
+  const legendarias = $('#b-legendarias').checked;
+  const conFarol = $('#b-farol').checked;
+  const quiero = Object.fromEntries(objetivo);
+  const tiposQuiero = new Set(objetivo.map(([k]) => D.ventajas[k].tipo));
+  const ranuras = RANURAS.map(([r]) => r).filter(r => r !== 'farol' || conFarol);
+
+  // Candidatos por ranura, agrupados por "firma" (lo que aportan a la busqueda): piezas equivalentes son una sola opcion.
+  const grupos = {};
+  for (const r of ranuras) {
+    const firmas = new Map();
+    for (const p of opciones(r)) {
+      const aporta = Object.entries(p.ventajas).filter(([k]) => quiero[k]).sort();
+      const huecos = p.huecos.filter(t => t === 'Any' || tiposQuiero.has(t)).sort();
+      const firma = JSON.stringify([aporta, huecos]);
+      if (!firmas.has(firma)) firmas.set(firma, {aporta: Object.fromEntries(aporta), huecos, piezas: []});
+      firmas.get(firma).piezas.push(p);
+    }
+    // Primero las normales, luego legendarias y exoticas (si no, llenan el limite de resultados antes de probar el
+    // resto); dentro, las que mas aportan.
+    grupos[r] = [...firmas.values()].sort((a, b) => especial(a) - especial(b) || valor(b) - valor(a));
+  }
+  // Piezas de una ranura. Cada legendaria aparece una vez por arma que se le puede unir (hereda su ventaja fija).
+  function opciones(r) {
+    const out = [];
+    for (const p of D.piezas) {
+      if (p.ranura !== r || (r === 'arma' && arma && p.arma !== arma)) continue;
+      if (p.exotica && !exoticas) continue;
+      if (p.union) {
+        if (!legendarias) continue;
+        for (const id of p.union) out.push({...p, ventajas: PIEZAS[id].ventajas, unida: PIEZAS[id]});
+      } else out.push(p);
+    }
+    return out;
+  }
+  function valor(g) { return Object.values(g.aporta).reduce((s, n) => s + n, 0) + g.huecos.length * MAX_CELULA; }
+  const mejor = ranuras.map(r => Math.max(0, ...grupos[r].map(valor)));
+
+  const resultados = [];
+  const LIMITE = 400, MOSTRAR = 60, t0 = performance.now();
+  const total = objetivo.reduce((s, [, n]) => s + n, 0);
+  let cortado = false;
+  (function dfs(i, elegido, tengo, huecos) {
+    if (resultados.length >= LIMITE || cortado) return;
+    if (performance.now() - t0 > 4000) { cortado = true; return; }
+    const falta = {};
+    let faltaTotal = 0;
+    for (const [k, n] of objetivo) { const f = n - (tengo[k] || 0); if (f > 0) { falta[k] = f; faltaTotal += f; } }
+    let resto = huecos.length * MAX_CELULA;
+    for (let j = i; j < ranuras.length; j++) resto += mejor[j];
+    if (faltaTotal > resto) return;
+    if (i === ranuras.length) {
+      const a = reparto(falta, huecos);
+      if (a) resultados.push({elegido: [...elegido], asignado: a});
+      return;
+    }
+    for (const g of grupos[ranuras[i]]) {
+      const t2 = {...tengo};
+      for (const [k, n] of Object.entries(g.aporta)) t2[k] = (t2[k] || 0) + n;
+      elegido.push(g);
+      dfs(i + 1, elegido, t2, huecos.concat(g.huecos));
+      elegido.pop();
+      if (resultados.length >= LIMITE || cortado) return;
+    }
+  })(0, [], {}, []);
+
+  // Mejores primero: mas huecos libres (para otras ventajas), menos exoticas y menos legendarias.
+  for (const res of resultados) {
+    const huecos = res.elegido.reduce((s, g) => s + g.piezas[0].huecos.length, 0);
+    res.nota = (huecos - res.asignado.length) * 10 - res.elegido.reduce((s, g) => s + [0, 8, 25][especial(g)], 0);
+  }
+  resultados.sort((a, b) => b.nota - a.nota);
+  const cab = el('p', {class: 'ayuda'}, resultados.length
+    ? `${resultados.length}${resultados.length >= LIMITE ? '+' : ''} combinaciones${cortado ? ' (búsqueda cortada por tiempo: afina los filtros)' : ''}` +
+      (resultados.length > MOSTRAR ? `; se muestran las ${MOSTRAR} con más huecos libres y menos exóticas` : '') + '. ' +
+      'Entre paréntesis, cuántas piezas equivalentes hay (pasa el ratón para verlas).'
+    : 'No hay ninguna combinación con esas ventajas' + (cortado ? ' en el tiempo disponible.' : '.'));
+  out.append(cab);
+  for (const res of resultados.slice(0, MOSTRAR)) out.append(pintarResultado(ranuras, res));
+}
+
+// 0 normal, 1 legendaria (con union), 2 exotica: un grupo cuenta como su pieza mas normal
+function especial(g) {
+  return Math.min(...g.piezas.map(p => p.exotica ? 2 : p.unida ? 1 : 0));
+}
+
+const nombreOpcion = p => p.unida ? `${p.nombre} + ${p.unida.nombre}` : p.nombre;
+
+function pintarResultado(ranuras, res) {
+  // las celulas asignadas se colocan en los huecos de cada pieza, en orden
+  const cola = res.asignado.slice();
+  const b = vacio();
+  const piezas = el('div', {class: 'piezas'});
+  ranuras.forEach((r, i) => {
+    const g = res.elegido[i];
+    const p = g.piezas.slice().sort((a, b) => especial({piezas: [a]}) - especial({piezas: [b]}))[0];
+    const celulas = p.huecos.map(t => {
+      const j = cola.findIndex(([tt, k]) => tt === t || (t === 'Any' && tt === 'Any'));
+      if (j < 0) return null;
+      const [, k] = cola.splice(j, 1)[0];
+      return {k, r: MAX_CELULA};
+    });
+    b[r] = {id: p.id, celulas, partes: (p.partes || []).map(s => s.defecto || ''), union: p.unida ? p.unida.id : ''};
+    piezas.append(el('div', {class: 'mini-pieza', title: g.piezas.map(nombreOpcion).join('\n')},
+      img(p.icono, p.nombre), el('div', {class: `n rareza-${p.rareza}`}, nombreOpcion(p) + (g.piezas.length > 1 ? ` (${g.piezas.length})` : '')),
+      ...celulas.filter(Boolean).map(c => el('div', {class: 'c'}, `${ventaja(c.k).nombre} +${c.r}`))));
+  });
+  const t = totales(b);
+  const libres = ranuras.reduce((s, r) => s + b[r].celulas.filter(c => !c).length, 0);
+  const resumen = Object.entries(t).filter(([k]) => deseo[k]).map(([k, n]) => `${ventaja(k).nombre} +${Math.min(n, ventaja(k).max)}`)
+    .join(' · ') + (libres ? ` · ${libres} hueco${libres > 1 ? 's' : ''} libre${libres > 1 ? 's' : ''}` : '');
+  return el('div', {class: 'resultado'}, piezas,
+    el('div', {class: 'pie-res'}, resumen,
+      el('button', {class: 'boton mini', onclick: () => { build = b; mostrar('constructor'); pintarConstructor(); }}, 'Abrir en el constructor')));
+}
+
+// ------------------------------------------------------------------------------------------------ lista de ventajas
+
+function pintarVentajas() {
+  const q = normal($('#v-filtro').value);
+  const cont = $('#v-lista');
+  cont.replaceChildren();
+  const claves = Object.keys(D.ventajas).filter(k => !q || normal(D.ventajas[k].nombre + ' ' + D.ventajas[k].rangos.flat().join(' ')).includes(q))
+    .sort((a, b) => ORDEN_TIPO.indexOf(D.ventajas[a].tipo) - ORDEN_TIPO.indexOf(D.ventajas[b].tipo) ||
+      D.ventajas[a].nombre.localeCompare(D.ventajas[b].nombre));
+  for (const k of claves) {
+    const v = D.ventajas[k];
+    const fuentes = D.piezas.filter(p => p.ventajas[k]).map(p => p.nombre);
+    cont.append(el('div', {class: `tarjeta tipo-${v.tipo}`},
+      el('div', {class: 'cab'}, tipoIcono(v.tipo), v.nombre, el('span', {class: 'tipo'}, nombreTipo(v.tipo))),
+      el('ol', {}, v.rangos.map(r => el('li', {}, r.join(' · ') || '—'))),
+      fuentes.length ? el('div', {class: 'sub', style: 'color:var(--tenue);font-size:12px;margin-top:4px'}, 'En: ' + fuentes.join(', ')) : null));
+  }
+}
+
+// ------------------------------------------------------------------------------------------------ arranque
+
+function mostrar(vista) {
+  for (const b of document.querySelectorAll('.pestanas button')) b.setAttribute('aria-selected', b.dataset.vista === vista);
+  for (const s of document.querySelectorAll('.vista')) s.hidden = s.id !== 'vista-' + vista;
+  try { localStorage.setItem('bc162-vista', vista); } catch (e) { /* sin almacenamiento */ }
+}
+
+function iniciar() {
+  if (!D) {
+    document.body.innerHTML = '<p style="padding:20px">Faltan los datos: ejecuta <b>GENERAR DATOS.bat</b> primero.</p>';
+    return;
+  }
+  $('#version').textContent = D.version;
+  $('#pie-version').textContent = D.version;
+  $('#pie-fecha').textContent = D.generado;
+  for (const b of document.querySelectorAll('.pestanas button')) b.addEventListener('click', () => mostrar(b.dataset.vista));
+  $('#copiar').addEventListener('click', async () => {
+    guardar();
+    try { await navigator.clipboard.writeText(location.href); $('#aviso').textContent = 'Enlace copiado.'; }
+    catch (e) { $('#aviso').textContent = 'Copia la dirección de la barra del navegador.'; }
+    setTimeout(() => { $('#aviso').textContent = ''; }, 2500);
+  });
+  $('#limpiar').addEventListener('click', () => { build = vacio(); pintarConstructor(); });
+  $('#b-arma').append(el('option', {value: ''}, 'Cualquiera'), ...Object.entries(D.armas).map(([k, n]) => el('option', {value: k}, n)));
+  $('#b-filtro').addEventListener('input', pintarListaBuscador);
+  $('#b-buscar').addEventListener('click', buscar);
+  $('#b-limpiar').addEventListener('click', () => { for (const k in deseo) delete deseo[k]; pintarListaBuscador(); $('#b-resultados').replaceChildren(); });
+  $('#v-filtro').addEventListener('input', pintarVentajas);
+  const m = location.hash.match(/^#b=(.*)$/);
+  if (m) build = decodificar(decodeURIComponent(m[1]));
+  pintarConstructor();
+  pintarListaBuscador();
+  pintarVentajas();
+  let vista = 'constructor';
+  try { vista = (!m && localStorage.getItem('bc162-vista')) || vista; } catch (e) { /* sin almacenamiento */ }
+  mostrar(vista);
+}
+
+iniciar();

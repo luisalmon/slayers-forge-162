@@ -1,0 +1,10 @@
+# Datos sacados del juego (cada usuario los genera con "GENERAR DATOS.bat" desde su propia instalacion)
+web/datos/
+web/iconos/
+
+# Copias empaquetadas de la web (llevan los datos y los iconos del juego)
+*.zip
+
+# Python
+__pycache__/
+*.pyc
