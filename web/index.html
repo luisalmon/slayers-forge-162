@@ -48,14 +48,14 @@
           <select id="b-arma"></select>
         </label>
         <label class="check"><input type="checkbox" id="b-farol" checked> Usar farol</label>
-        <label class="check"><input type="checkbox" id="b-legendarias" checked> Incluir armas legendarias</label>
+        <label class="check" title="Marcado: solo armas legendarias, unidas a un arma que dé alguna ventaja pedida. Desmarcado: solo armas normales."><input type="checkbox" id="b-legendarias" checked> Armas legendarias</label>
         <label class="check"><input type="checkbox" id="b-exoticas" checked> Incluir exóticas</label>
         <input id="b-filtro" class="buscar" type="search" placeholder="Filtrar ventajas…">
-        <button id="b-buscar" class="boton">Buscar</button>
         <button id="b-limpiar" class="boton secundario">Quitar todas</button>
       </div>
-      <p class="ayuda">Haz clic en una ventaja para pedirla a +3; otro clic, a +6; otro clic, la quitas. Se buscan piezas al máximo de mejora, con células +3 en sus huecos. Las armas legendarias se prueban unidas a cada arma posible (heredan su ventaja fija).</p>
+      <p class="ayuda">Haz clic en una ventaja para pedirla a +3; otro clic, a +6; otro clic, la quitas. Los resultados se actualizan solos. Se buscan piezas al máximo de mejora, con células +3 en sus huecos. Con «Armas legendarias» marcado solo se usan legendarias, unidas a un arma de su tipo y elemento que dé alguna ventaja pedida; desmarcado, solo armas normales.</p>
       <div id="b-ventajas" class="lista-ventajas"></div>
+      <label class="check mostrar-desc"><input type="checkbox" id="b-desc"> Mostrar descripción</label>
       <div id="b-resultados" class="resultados" aria-live="polite"></div>
     </div>
   </section>

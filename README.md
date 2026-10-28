@@ -1,6 +1,6 @@
 # Slayer's Forge · Dauntless 1.6.2
 
-Creador y buscador de builds para Dauntless 1.6.2, en el navegador y sin servidor ni internet. No modifica el juego: solo lee sus paks para sacar los datos.
+Creador y buscador de builds para Dauntless 1.6.2 (build `++dauntless+rel-1.6.2-CL-271281`), en el navegador y sin servidor ni internet. No modifica el juego: solo lee sus paks para sacar los datos. Todo lo que muestra sale de esa versión; no mezcla datos de otras.
 
 > Proyecto de fans, sin relación con Phoenix Labs. Necesitas tu propia copia de Dauntless 1.6.2: el repositorio no incluye nada del juego (datos ni iconos); se generan en tu PC con `GENERAR DATOS.bat`.
 
@@ -25,9 +25,15 @@ Creador y buscador de builds para Dauntless 1.6.2, en el navegador y sin servido
   - **Importar código** acepta ese código o un enlace con `#b=…`. Descarta lo que no encaje: piezas en otra ranura, células en huecos de otro tipo, partes que no son de esa ranura y uniones no permitidas.
   - **Copiar enlace** guarda la build en la dirección (`#b=…`) para abrirla después en tu PC. Como apunta a la carpeta de tu PC, para compartir usa el código.
 - **Buscador**:
-  - Las ventajas salen en 5 columnas, una por tipo (Potencia, Técnica, Defensa, Movilidad y Utilidad). Un clic la pide a +3, otro a +6 y otro la quita. Busca combinaciones de piezas con células +3 que lleguen a esos rangos.
-  - Filtros: tipo de arma, con o sin farol, **incluir armas legendarias** (cada legendaria se prueba unida a cada arma posible) e incluir exóticas.
-  - Primero salen las combinaciones con más huecos libres y menos exóticas. Las piezas equivalentes se agrupan; entre paréntesis va cuántas hay.
+  - Las ventajas salen en 5 columnas, una por tipo (Potencia, Técnica, Defensa, Movilidad y Utilidad). Un clic la pide a +3, otro a +6 y otro la quita. Los resultados se actualizan solos al cambiar las ventajas o los filtros, sin botón de buscar. Busca combinaciones de piezas con células +3 que lleguen a esos rangos.
+  - Filtros: tipo de arma, con o sin farol, armas legendarias e incluir exóticas.
+  - **Armas legendarias** (marcada por defecto):
+    - Marcada: el arma es siempre una legendaria, unida a un arma de su mismo tipo y elemento que dé alguna de las ventajas pedidas.
+    - Si ninguna unión da lo pedido, se usan legendarias con la unión libre y se avisa. Los repetidores no tienen legendarias en 1.6.2.
+    - Desmarcada: solo armas normales.
+  - **Mostrar descripción** (debajo de la lista, desmarcada por defecto): cada ventaja muestra lo que hace a +3 y a +6.
+  - Cada resultado muestra, debajo de cada pieza, la ventaja fija que da (en negrita si es una de las pedidas) y sus huecos (la célula que lleva o "Libre", con el icono y el color de su tipo) y, abajo, las ventajas conseguidas y los huecos libres agrupados por tipo (por ejemplo, Potencia ×3, Técnica ×2).
+  - Se muestran las 60 mejores: más huecos libres, menos exóticas y más rango de sobra en lo pedido. Las piezas equivalentes se agrupan; entre paréntesis va cuántas hay.
   - "Abrir en el constructor" carga la build.
 - **Ventajas**: todas las ventajas con lo que hacen en cada rango y qué piezas las dan.
 
@@ -70,10 +76,18 @@ web\index.html, app.js, style.css   la página (JavaScript sin dependencias)
   - variantes de armadura sin ventajas, huecos ni efectos (por ejemplo, `AR_LERAWR_PLAYASKAT_HELM`);
   - el arco, que no salió en esta versión;
   - el pak `zzzzzz_Mega400DyeBundles_P.pak`, de tintes y con otro formato.
-- **Buscador:** búsqueda en profundidad por ranura, agrupando las piezas que aportan lo mismo.
-  - Poda: corta cuando lo que falta ya no cabe en lo que pueden dar las ranuras restantes.
-  - Reparto de células: cada ventaja que falta necesita `ceil(falta/3)` huecos de su tipo o prismáticos.
-  - Límites: 400 combinaciones o 4 segundos.
+- **Buscador:** búsqueda completa en profundidad por ranura, quedándose con las 60 mejores.
+  - **Grupos:** las piezas que aportan lo mismo a la búsqueda (ventajas pedidas y huecos útiles) son una sola opción.
+  - **Dominadas:** se descartan los grupos que otro del mismo hueco supera en todo, porque nunca darían un resultado mejor:
+    - igual o más de cada ventaja pedida;
+    - huecos iguales o mejores (el prismático cubre cualquier tipo);
+    - tantos huecos en total;
+    - y sin ser más exótico.
+  - **Poda por tipo:** en cada paso suma lo mejor que aún pueden dar las ranuras restantes (por ventaja y por tipo de hueco) y comprueba si las células que faltan caben en huecos de su tipo o prismáticos.
+  - **Reparto de células:** cada ventaja que falta necesita `ceil(falta/3)` huecos de su tipo o prismáticos.
+  - **Límite:** 4 segundos; si se corta, se avisa.
+  - **Validado** contra una búsqueda de fuerza bruta independiente: en todos los casos probados encuentra la misma mejor combinación.
+- **Unión de legendarias:** ventaja fija y efecto único de otra arma del mismo tipo y elemento, como dice la wiki oficial y las notas del parche 1.5.3, anterior a la 1.6.2. En los datos de 1.6.2, las legendarias llevan la etiqueta `notsoulpart`, que impide unirlas entre sí.
 
 **Formato del enlace:** `#b=` seguido de las seis ranuras separadas por `|`, cada una como `id~célula,célula~parte,parte[~arma unida]`.
 - **Código de build:** `SF162-` más ese mismo texto en base64url (UTF-8). No lleva datos del juego, solo los identificadores de las piezas, ventajas y partes, así que vale en cualquier copia generada desde Dauntless 1.6.2.

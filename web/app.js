@@ -382,6 +382,7 @@ function siguienteRango(k) {
 
 function pintarListaBuscador() {
   const q = normal($('#b-filtro').value);
+  const conDesc = $('#b-desc').checked;
   const cont = $('#b-ventajas');
   cont.replaceChildren();
   for (const t of ORDEN_TIPO) {
@@ -394,20 +395,36 @@ function pintarListaBuscador() {
     for (const k of claves) {
       const v = D.ventajas[k];
       const n = deseo[k] || 0;
+      // con "Mostrar descripcion": lo que hace a +3 y a +6 (o a su maximo)
+      const desc = conDesc ? el('span', {class: 'desc'}, PASOS.filter(m => m <= v.max).map(m =>
+        el('span', {class: 'desc-rango'}, el('b', {}, '+' + m), ' ' + ((v.rangos[m - 1] || []).join(' · ') || '—')))) : null;
       col.append(el('button', {
-        class: `ventaja-btn ${n ? 'activa' : ''}`, type: 'button', 'aria-pressed': n ? 'true' : 'false',
+        class: `ventaja-btn ${n ? 'activa' : ''} ${conDesc ? 'con-desc' : ''}`, type: 'button', 'aria-pressed': n ? 'true' : 'false',
         title: `${v.nombre}${n ? ' +' + n : ''} · clic: ${siguienteRango(k) ? '+' + siguienteRango(k) : 'quitar'}\n` +
           (v.rangos[(n || v.max) - 1] || []).join('\n'),
         onclick: () => {
           const s = siguienteRango(k);
           if (s) deseo[k] = s; else delete deseo[k];
           pintarListaBuscador();
+          programarBusqueda();
         }},
-        el('span', {class: 'nom'}, v.nombre), el('span', {class: 'rango-pedido'}, n ? '+' + n : '')));
+        el('span', {class: 'nom'}, v.nombre), el('span', {class: 'rango-pedido'}, n ? '+' + n : ''), desc));
     }
     if (!claves.length) col.append(el('p', {class: 'vacio'}, 'Ninguna coincide.'));
     cont.append(col);
   }
+}
+
+// Busca solo al cambiar las ventajas o los filtros. Con un pequeño retraso, para que varios clics seguidos hagan una
+// sola busqueda.
+let busquedaPendiente = 0;
+
+function programarBusqueda() {
+  clearTimeout(busquedaPendiente);
+  busquedaPendiente = setTimeout(() => {
+    if (Object.keys(deseo).length) buscar();
+    else $('#b-resultados').replaceChildren();
+  }, 150);
 }
 
 // Reparte células +3 en los huecos: cada ventaja que falta necesita ceil(falta/3) huecos de su tipo o prismáticos.
@@ -443,8 +460,41 @@ function buscar() {
   const quiero = Object.fromEntries(objetivo);
   const tiposQuiero = new Set(objetivo.map(([k]) => D.ventajas[k].tipo));
   const ranuras = RANURAS.map(([r]) => r).filter(r => r !== 'farol' || conFarol);
+  const TIPOS_HUECO = [...ORDEN_TIPO, 'Any'];
+  let aviso = '';
 
-  // Candidatos por ranura, agrupados por "firma" (lo que aportan a la busqueda): piezas equivalentes son una sola opcion.
+  // Piezas de una ranura. Arma: con "Armas legendarias" marcado, solo legendarias, cada una unida a un arma de su tipo y
+  // elemento que de alguna ventaja pedida (hereda su ventaja fija); desmarcado, solo armas normales.
+  function opciones(r) {
+    const lista = [];
+    for (const p of D.piezas) {
+      if (p.ranura !== r) continue;
+      if (r !== 'arma') {
+        if (!p.exotica || exoticas) lista.push(p);
+        continue;
+      }
+      if (arma && p.arma !== arma) continue;
+      if (legendarias) {
+        if (!p.union) continue;
+        for (const id of p.union) {
+          const u = PIEZAS[id];
+          if (Object.keys(u.ventajas).some(k => quiero[k])) lista.push({...p, ventajas: sumar(p.ventajas, u.ventajas), unida: u});
+        }
+      } else if (!p.union && (!p.exotica || exoticas)) {
+        lista.push(p);
+      }
+    }
+    if (r === 'arma' && legendarias && !lista.length) {
+      // ninguna union da lo pedido: legendarias con la union libre (sus dos huecos prismaticos siguen sirviendo)
+      for (const p of D.piezas) if (p.ranura === 'arma' && p.union && (!arma || p.arma === arma)) lista.push({...p, unionLibre: true});
+      aviso = lista.length
+        ? 'Ninguna unión da las ventajas pedidas: se usan las legendarias con la unión libre.'
+        : `No hay armas legendarias${arma ? ' de ' + D.armas[arma].toLowerCase() : ''} en 1.6.2: desmarca «Armas legendarias».`;
+    }
+    return lista;
+  }
+
+  // Grupos por ranura: piezas que aportan lo mismo a la busqueda (ventajas pedidas y huecos utiles) son una sola opcion.
   const grupos = {};
   for (const r of ranuras) {
     const firmas = new Map();
@@ -455,66 +505,90 @@ function buscar() {
       if (!firmas.has(firma)) firmas.set(firma, {aporta: Object.fromEntries(aporta), huecos, piezas: []});
       firmas.get(firma).piezas.push(p);
     }
-    // Primero las normales, luego legendarias y exoticas (si no, llenan el limite de resultados antes de probar el
-    // resto); dentro, las que mas aportan.
-    grupos[r] = [...firmas.values()].sort((a, b) => especial(a) - especial(b) || valor(b) - valor(a));
-  }
-  // Piezas de una ranura. Cada legendaria aparece una vez por arma que se le puede unir (hereda su ventaja fija).
-  function opciones(r) {
-    const out = [];
-    for (const p of D.piezas) {
-      if (p.ranura !== r || (r === 'arma' && arma && p.arma !== arma)) continue;
-      if (p.exotica && !exoticas) continue;
-      if (p.union) {
-        if (!legendarias) continue;
-        for (const id of p.union) out.push({...p, ventajas: sumar(p.ventajas, PIEZAS[id].ventajas), unida: PIEZAS[id]});
-      } else out.push(p);
+    const lista = [...firmas.values()];
+    for (const g of lista) {
+      g.cuenta = {};
+      for (const h of g.huecos) g.cuenta[h] = (g.cuenta[h] || 0) + 1;
+      g.total = representante(g).huecos.length;        // huecos de la pieza que se mostrara (cuentan como libres)
+      g.esp = especial(g);
     }
-    return out;
+    // Fuera las dominadas: otra del mismo hueco da lo mismo o mas de lo pedido, con huecos iguales o mejores (el
+    // prismatico cubre cualquier tipo), tantos huecos en total y no es mas "especial" (exotica). Nunca darian un
+    // resultado mejor.
+    grupos[r] = lista.filter(b => !lista.some(a => a !== b && domina(a, b)))
+      .sort((a, b) => a.esp - b.esp || valor(b) - valor(a));
+  }
+  function domina(a, b) {
+    if (a.esp > b.esp || a.total < b.total) return false;
+    for (const k in quiero) if ((a.aporta[k] || 0) < (b.aporta[k] || 0)) return false;
+    let deficit = 0;
+    for (const t of ORDEN_TIPO) deficit += Math.max(0, (b.cuenta[t] || 0) - (a.cuenta[t] || 0));
+    return (a.cuenta.Any || 0) - (b.cuenta.Any || 0) >= deficit;   // (dos grupos distintos nunca son iguales en todo)
   }
   function valor(g) { return Object.values(g.aporta).reduce((s, n) => s + n, 0) + g.huecos.length * MAX_CELULA; }
-  const mejor = ranuras.map(r => Math.max(0, ...grupos[r].map(valor)));
 
-  const resultados = [];
-  const LIMITE = 400, MOSTRAR = 60, t0 = performance.now();
-  let cortado = false;
-  (function dfs(i, elegido, tengo, huecos) {
-    if (resultados.length >= LIMITE || cortado) return;
-    if (performance.now() - t0 > 4000) { cortado = true; return; }
-    const falta = {};
-    let faltaTotal = 0;
-    for (const [k, n] of objetivo) { const f = n - (tengo[k] || 0); if (f > 0) { falta[k] = f; faltaTotal += f; } }
-    let resto = huecos.length * MAX_CELULA;
-    for (let j = i; j < ranuras.length; j++) resto += mejor[j];
-    if (faltaTotal > resto) return;
-    if (i === ranuras.length) {
-      const a = reparto(falta, huecos);
-      if (a) resultados.push({elegido: [...elegido], asignado: a});
+  // Cotas de lo que aun pueden dar las ranuras que faltan (de i en adelante): por ventaja y por tipo de hueco.
+  const n = ranuras.length;
+  const supAporta = Array.from({length: n + 1}, () => ({}));
+  const supHueco = Array.from({length: n + 1}, () => ({}));
+  for (let i = n - 1; i >= 0; i--) {
+    const gs = grupos[ranuras[i]];
+    for (const k in quiero) supAporta[i][k] = (supAporta[i + 1][k] || 0) + Math.max(0, ...gs.map(g => g.aporta[k] || 0));
+    for (const t of TIPOS_HUECO) supHueco[i][t] = (supHueco[i + 1][t] || 0) + Math.max(0, ...gs.map(g => g.cuenta[t] || 0));
+  }
+  // Poda: con lo mejor que queda, ¿caben las celulas que faltan en huecos de su tipo o prismaticos?
+  function posible(i, tengo, cuenta) {
+    const demanda = {};
+    for (const [k, m] of objetivo) {
+      const falta = m - (tengo[k] || 0) - (supAporta[i][k] || 0);
+      if (falta > 0) demanda[D.ventajas[k].tipo] = (demanda[D.ventajas[k].tipo] || 0) + Math.ceil(falta / MAX_CELULA);
+    }
+    let sobra = 0;
+    for (const t in demanda) sobra += Math.max(0, demanda[t] - (cuenta[t] || 0) - (supHueco[i][t] || 0));
+    return sobra <= (cuenta.Any || 0) + (supHueco[i].Any || 0);
+  }
+
+  // Busqueda completa (con poda) quedandose con las mejores: mas huecos libres, menos exoticas y mas rango de sobra.
+  const MOSTRAR = 60, t0 = performance.now();
+  let mejores = [], total = 0, cortado = false;
+  const nota = (elegido, asignado, tengo) => {
+    const libres = elegido.reduce((s, g) => s + g.total, 0) - asignado.length;
+    const extra = objetivo.reduce((s, [k, m]) => s + Math.max(0, Math.min(tengo[k] || 0, D.ventajas[k].max) - m), 0);
+    return libres * 10 - elegido.reduce((s, g) => s + (g.esp === 2 ? 25 : 0), 0) + extra;
+  };
+  (function dfs(i, elegido, tengo, cuenta, huecos) {
+    if (cortado) return;
+    if ((total & 255) === 0 && performance.now() - t0 > 4000) { cortado = true; return; }
+    if (!posible(i, tengo, cuenta)) return;
+    if (i === n) {
+      const falta = {};
+      for (const [k, m] of objetivo) if (m > (tengo[k] || 0)) falta[k] = m - (tengo[k] || 0);
+      const asignado = reparto(falta, huecos);
+      if (!asignado) return;
+      total++;
+      mejores.push({elegido: [...elegido], asignado, nota: nota(elegido, asignado, tengo)});
+      if (mejores.length > 4 * MOSTRAR) mejores = mejores.sort((a, b) => b.nota - a.nota).slice(0, MOSTRAR);
       return;
     }
     for (const g of grupos[ranuras[i]]) {
-      const t2 = {...tengo};
-      for (const [k, n] of Object.entries(g.aporta)) t2[k] = (t2[k] || 0) + n;
+      const t2 = {...tengo}, c2 = {...cuenta};
+      for (const [k, m] of Object.entries(g.aporta)) t2[k] = (t2[k] || 0) + m;
+      for (const [h, m] of Object.entries(g.cuenta)) c2[h] = (c2[h] || 0) + m;
       elegido.push(g);
-      dfs(i + 1, elegido, t2, huecos.concat(g.huecos));
+      dfs(i + 1, elegido, t2, c2, huecos.concat(g.huecos));
       elegido.pop();
-      if (resultados.length >= LIMITE || cortado) return;
+      if (cortado) return;
     }
-  })(0, [], {}, []);
+  })(0, [], {}, {}, []);
+  mejores.sort((a, b) => b.nota - a.nota);
 
-  // Mejores primero: mas huecos libres (para otras ventajas), menos exoticas y menos legendarias.
-  for (const res of resultados) {
-    const huecos = res.elegido.reduce((s, g) => s + representante(g).huecos.length, 0);
-    res.nota = (huecos - res.asignado.length) * 10 - res.elegido.reduce((s, g) => s + [0, 8, 25][especial(g)], 0);
-  }
-  resultados.sort((a, b) => b.nota - a.nota);
-  const cab = el('p', {class: 'ayuda'}, resultados.length
-    ? `${resultados.length}${resultados.length >= LIMITE ? '+' : ''} combinaciones${cortado ? ' (búsqueda cortada por tiempo: afina los filtros)' : ''}` +
-      (resultados.length > MOSTRAR ? `; se muestran las ${MOSTRAR} con más huecos libres y menos exóticas` : '') + '. ' +
+  if (aviso) out.append(el('p', {class: 'aviso-busqueda'}, aviso));
+  out.append(el('p', {class: 'ayuda'}, total
+    ? `${total} combinaciones${cortado ? ' (búsqueda cortada a los 4 s: puede haber más; afina los filtros)' : ''}` +
+      (total > MOSTRAR ? `; se muestran las ${MOSTRAR} mejores (más huecos libres, menos exóticas)` : '') + '. ' +
       'Entre paréntesis, cuántas piezas equivalentes hay (pasa el ratón para verlas).'
-    : 'No hay ninguna combinación con esas ventajas' + (cortado ? ' en el tiempo disponible.' : '.'));
-  out.append(cab);
-  for (const res of resultados.slice(0, MOSTRAR)) out.append(pintarResultado(ranuras, res));
+    : 'No hay ninguna combinación con esas ventajas' + (cortado ? ' en el tiempo disponible.' : '.')));
+  for (const res of mejores.slice(0, MOSTRAR)) out.append(pintarResultado(ranuras, res));
 }
 
 // 0 normal, 1 legendaria (con union), 2 exotica: un grupo cuenta como su pieza mas normal
@@ -522,7 +596,7 @@ function especial(g) {
   return Math.min(...g.piezas.map(p => p.exotica ? 2 : p.unida ? 1 : 0));
 }
 
-const nombreOpcion = p => p.unida ? `${p.nombre} + ${p.unida.nombre}` : p.nombre;
+const nombreOpcion = p => p.unida ? `${p.nombre} + ${p.unida.nombre}` : p.unionLibre ? `${p.nombre} (unión libre)` : p.nombre;
 
 // Pieza que se muestra de un grupo de equivalentes: la mas normal y, entre ellas, la de mas huecos (mas libres).
 function representante(g) {
@@ -553,14 +627,35 @@ function pintarResultado(ranuras, res) {
     b[r] = {id: p.id, celulas, partes: (p.partes || []).map(s => s.defecto || ''), union: p.unida ? p.unida.id : ''};
     piezas.append(el('div', {class: 'mini-pieza', title: g.piezas.map(nombreOpcion).join('\n')},
       img(p.icono, p.nombre), el('div', {class: `n rareza-${p.rareza}`}, nombreOpcion(p) + (g.piezas.length > 1 ? ` (${g.piezas.length})` : '')),
-      ...celulas.filter(Boolean).map(c => el('div', {class: 'c'}, `${ventaja(c.k).nombre} +${c.r}`))));
+      // lo que da la pieza por si misma (en una legendaria, tambien lo del arma unida); en negrita si se ha pedido
+      ...Object.entries(p.ventajas).filter(([k]) => ventaja(k)).map(([k, n]) =>
+        el('div', {class: `aporta tipo-${ventaja(k).tipo} ${deseo[k] ? 'pedida' : ''}`, title: 'Ventaja fija de la pieza'},
+          tipoIcono(ventaja(k).tipo), `${ventaja(k).nombre} +${n}`)),
+      // cada hueco de la pieza: la celula que lleva o "Libre" con su tipo
+      ...p.huecos.map((t, j) => {
+        const c = celulas[j];
+        const v = c && ventaja(c.k);
+        return v
+          ? el('div', {class: `celda tipo-${v.tipo}`}, tipoIcono(v.tipo), `${v.nombre} +${c.r}`)
+          : el('div', {class: `celda libre tipo-${t}`, title: 'Hueco libre de ' + nombreTipo(t).toLowerCase()}, tipoIcono(t), 'Libre');
+      })));
   });
   const t = totales(b);
-  const libres = ranuras.reduce((s, r) => s + b[r].celulas.filter(c => !c).length, 0);
-  const resumen = Object.entries(t).filter(([k]) => deseo[k]).map(([k, n]) => `${ventaja(k).nombre} +${Math.min(n, ventaja(k).max)}`)
-    .join(' · ') + (libres ? ` · ${libres} hueco${libres > 1 ? 's' : ''} libre${libres > 1 ? 's' : ''}` : '');
+  // Ventajas pedidas que se consiguen (con su color de tipo) y huecos libres agrupados por tipo.
+  const conseguidas = Object.keys(deseo).filter(k => t[k]).sort((a, c) =>
+    ORDEN_TIPO.indexOf(ventaja(a).tipo) - ORDEN_TIPO.indexOf(ventaja(c).tipo) || ventaja(a).nombre.localeCompare(ventaja(c).nombre))
+    .map(k => el('span', {class: `chip tipo-${ventaja(k).tipo}`}, tipoIcono(ventaja(k).tipo), `${ventaja(k).nombre} +${Math.min(t[k], ventaja(k).max)}`));
+  const porTipo = {};
+  for (const r of ranuras) PIEZAS[b[r].id].huecos.forEach((h, j) => { if (!b[r].celulas[j]) porTipo[h] = (porTipo[h] || 0) + 1; });
+  const libres = [...ORDEN_TIPO, 'Any'].filter(h => porTipo[h]).map(h =>
+    el('span', {class: `chip libre tipo-${h}`, title: `${porTipo[h]} hueco${porTipo[h] > 1 ? 's' : ''} libre${porTipo[h] > 1 ? 's' : ''} de ${nombreTipo(h).toLowerCase()}`},
+      tipoIcono(h), `${nombreTipo(h)} ×${porTipo[h]}`));
   return el('div', {class: 'resultado'}, piezas,
-    el('div', {class: 'pie-res'}, resumen,
+    el('div', {class: 'pie-res'},
+      el('div', {class: 'filas-res'},
+        el('div', {class: 'lineas'}, el('span', {class: 'etiqueta-res'}, 'Ventajas'), conseguidas),
+        el('div', {class: 'lineas'}, el('span', {class: 'etiqueta-res'}, 'Huecos libres'),
+          libres.length ? libres : el('span', {class: 'vacio'}, 'ninguno'))),
       el('button', {class: 'boton mini', onclick: () => { build = b; mostrar('constructor'); pintarConstructor(); }}, 'Abrir en el constructor')));
 }
 
@@ -635,8 +730,9 @@ function iniciar() {
   });
   $('#b-arma').append(el('option', {value: ''}, 'Cualquiera'), ...Object.entries(D.armas).map(([k, n]) => el('option', {value: k}, n)));
   $('#b-filtro').addEventListener('input', pintarListaBuscador);
-  $('#b-buscar').addEventListener('click', buscar);
-  $('#b-limpiar').addEventListener('click', () => { for (const k in deseo) delete deseo[k]; pintarListaBuscador(); $('#b-resultados').replaceChildren(); });
+  for (const id of ['#b-arma', '#b-farol', '#b-legendarias', '#b-exoticas']) $(id).addEventListener('change', programarBusqueda);
+  $('#b-desc').addEventListener('change', pintarListaBuscador);
+  $('#b-limpiar').addEventListener('click', () => { for (const k in deseo) delete deseo[k]; pintarListaBuscador(); programarBusqueda(); });
   $('#v-filtro').addEventListener('input', pintarVentajas);
   const m = location.hash.match(/^#b=(.*)$/);
   if (m) {
