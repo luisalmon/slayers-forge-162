@@ -2,9 +2,20 @@
 
 Creador y buscador de builds para Dauntless 1.6.2 (build `++dauntless+rel-1.6.2-CL-271281`), en el navegador y sin servidor ni internet. No modifica el juego: solo lee sus paks para sacar los datos. Todo lo que muestra sale de esa versión; no mezcla datos de otras.
 
-> Proyecto de fans, sin relación con Phoenix Labs. Necesitas tu propia copia de Dauntless 1.6.2: el repositorio no incluye nada del juego (datos ni iconos); se generan en tu PC con `GENERAR DATOS.bat`.
+**Web:** https://luisalmon.github.io/slayers-forge-162/
 
-## Uso
+> Proyecto de fans no oficial y sin ánimo de lucro. Dauntless y todo su contenido pertenecen a Phoenix Labs (ver [Licencia y aviso legal](#licencia-y-aviso-legal)).
+
+## Ramas
+
+| Rama | Contenido |
+|---|---|
+| `main` | El código: el extractor (`extractor/`) y la página (`web/`), sin datos del juego. |
+| `gh-pages` | La web publicada en GitHub Pages: la página con los datos e iconos ya generados desde Dauntless 1.6.2. |
+
+Para actualizar la web se regeneran los datos y se copia `web/` (con `datos/` e `iconos/`) a la rama `gh-pages`.
+
+## Uso en tu PC (sin internet)
 
 1. **`GENERAR DATOS.bat`** (una vez, y cada vez que cambie el juego).
    - Lee los paks de `C:\Games\Dauntless_1.6.2` y crea `web\datos\datos.js` y `web\iconos\`. Tarda unos segundos.
@@ -93,8 +104,11 @@ web\index.html, app.js, style.css   la página (JavaScript sin dependencias)
 - **Código de build:** `SF162-` más ese mismo texto en base64url (UTF-8). No lleva datos del juego, solo los identificadores de las piezas, ventajas y partes, así que vale en cualquier copia generada desde Dauntless 1.6.2.
 - Célula: `KW_VENTAJA.rango`, o `-` si el hueco está vacío.
 
-Datos e iconos salen de tu propia instalación y se quedan en esta carpeta. No los redistribuyas.
+## Licencia y aviso legal
 
-## Licencia
-
-MIT (ver `LICENSE`). Autor: Luis Almon.
+- **Código:** MIT (ver `LICENSE`). © 2026 Luis Almon. La licencia cubre solo el código fuente de este proyecto.
+- **Contenido del juego:** Dauntless, su nombre y logotipos, y los nombres, textos, iconos, imágenes y datos de sus objetos son marcas registradas o material protegido por derechos de autor de Phoenix Labs y de sus respectivos titulares. Todos los derechos reservados a sus respectivos propietarios. Este proyecto no reclama ningún derecho sobre ese contenido.
+- **Proyecto no oficial:** es un proyecto de fans, gratuito y sin ánimo de lucro. No está afiliado, asociado, patrocinado ni respaldado por Phoenix Labs.
+- **Uso informativo:** el contenido del juego se muestra solo para ayudar a la comunidad a planificar builds.
+- **Sin garantías:** el software se ofrece "tal cual", sin garantía de ningún tipo; los datos pueden contener errores.
+- **Retirada de contenido:** si eres titular de algún contenido y quieres que se retire, abre un issue en el repositorio y se eliminará.
