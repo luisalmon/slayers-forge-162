@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slayer's Forge 1.6.2</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="barra">
+  <div class="marca">
+    <span class="titulo">Slayer's Forge</span>
+    <span class="version">Dauntless <b id="version">1.6.2</b></span>
+  </div>
+  <nav class="pestanas" role="tablist">
+    <button role="tab" data-vista="constructor" aria-selected="true">Constructor</button>
+    <button role="tab" data-vista="buscador" aria-selected="false">Buscador</button>
+    <button role="tab" data-vista="ventajas" aria-selected="false">Ventajas</button>
+  </nav>
+</header>
+
+<main>
+  <section id="vista-constructor" class="vista">
+    <div class="constructor">
+      <div class="columna-equipo">
+        <div class="acciones">
+          <button id="exportar" class="boton">Exportar código</button>
+          <button id="importar" class="boton secundario">Importar código</button>
+          <button id="copiar" class="boton secundario">Copiar enlace</button>
+          <button id="limpiar" class="boton secundario">Vaciar</button>
+          <span id="aviso" class="aviso" aria-live="polite"></span>
+        </div>
+        <div id="ranuras" class="ranuras"></div>
+      </div>
+      <aside class="columna-resumen">
+        <h2>Ventajas</h2>
+        <div id="resumen" class="resumen"></div>
+        <h2>Efectos</h2>
+        <div id="efectos" class="efectos"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="vista-buscador" class="vista" hidden>
+    <div class="buscador">
+      <div class="filtros">
+        <label>Arma
+          <select id="b-arma"></select>
+        </label>
+        <label class="check"><input type="checkbox" id="b-farol" checked> Usar farol</label>
+        <label class="check" title="Marcado: solo armas legendarias, unidas a un arma que dé alguna ventaja pedida. Desmarcado: solo armas normales."><input type="checkbox" id="b-legendarias" checked> Armas legendarias</label>
+        <label class="check"><input type="checkbox" id="b-exoticas" checked> Incluir exóticas</label>
+        <input id="b-filtro" class="buscar" type="search" placeholder="Filtrar ventajas…">
+        <button id="b-limpiar" class="boton secundario">Quitar todas</button>
+      </div>
+      <p class="ayuda">Haz clic en una ventaja para pedirla a +3; otro clic, a +6; otro clic, la quitas. Los resultados se actualizan solos. Se buscan piezas al máximo de mejora, con células +3 en sus huecos. Con «Armas legendarias» marcado solo se usan legendarias, unidas a un arma de su tipo y elemento que dé alguna ventaja pedida; desmarcado, solo armas normales.</p>
+      <div id="b-ventajas" class="lista-ventajas"></div>
+      <label class="check mostrar-desc"><input type="checkbox" id="b-desc"> Mostrar descripción</label>
+      <div id="b-resultados" class="resultados" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="vista-ventajas" class="vista" hidden>
+    <input id="v-filtro" class="buscar" type="search" placeholder="Buscar ventaja o efecto…">
+    <div id="v-lista" class="tabla-ventajas"></div>
+  </section>
+</main>
+
+<dialog id="selector" class="selector">
+  <form method="dialog" class="selector-cabecera">
+    <h3 id="sel-titulo">Elegir</h3>
+    <input id="sel-filtro" class="buscar" type="search" placeholder="Buscar por nombre o ventaja…" autocomplete="off">
+    <select id="sel-arma" hidden></select>
+    <button class="boton secundario" value="cancelar">Cerrar</button>
+  </form>
+  <div id="sel-lista" class="sel-lista"></div>
+</dialog>
+
+<dialog id="compartir" class="selector compartir">
+  <form method="dialog" class="selector-cabecera">
+    <h3 id="comp-titulo">Código de la build</h3>
+    <button class="boton secundario" value="cancelar">Cerrar</button>
+  </form>
+  <div class="comp-cuerpo">
+    <p id="comp-ayuda" class="ayuda"></p>
+    <textarea id="comp-codigo" rows="4" spellcheck="false" aria-label="Código de la build"></textarea>
+    <div class="acciones">
+      <button id="comp-copiar" class="boton">Copiar código</button>
+      <button id="comp-cargar" class="boton">Cargar build</button>
+      <span id="comp-aviso" class="aviso" aria-live="polite"></span>
+    </div>
+  </div>
+</dialog>
+
+<footer class="pie">
+  Datos generados desde tu instalación de Dauntless <span id="pie-version"></span> (<span id="pie-fecha"></span>).
+  Proyecto independiente, sin relación con Phoenix Labs.
+</footer>
+
+<script src="datos/datos.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
