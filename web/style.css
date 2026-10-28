@@ -48,7 +48,7 @@ img.ico-tipo { width: 18px; height: 18px; flex: none; }
 .marca { display: flex; align-items: baseline; gap: 10px; }
 .titulo { font-size: 20px; font-weight: 700; letter-spacing: .5px; color: var(--acento-2); }
 .version { color: var(--tenue); font-size: 13px; }
-.pestanas { display: flex; gap: 4px; }
+.pestanas { display: flex; flex-wrap: wrap; gap: 4px; }
 .pestanas button {
   background: none; border: 0; padding: 8px 14px; border-radius: var(--radio);
   color: var(--tenue); cursor: pointer;
@@ -77,7 +77,7 @@ select { background: var(--panel-2); border: 1px solid var(--borde); border-radi
 
 /* constructor */
 .constructor { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
-.acciones { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .ranuras { display: grid; gap: 10px; }
 .ranura {
   background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio);
@@ -193,3 +193,14 @@ select { background: var(--panel-2); border: 1px solid var(--borde); border-radi
   main { padding: 12px 12px 30px; }
   .buscar { min-width: 0; flex: 1; }
 }
+
+/* compartir: exportar / importar codigo de build */
+.compartir { width: min(640px, 96vw); }
+.comp-cuerpo { padding: 12px 14px 16px; display: grid; gap: 10px; }
+.comp-cuerpo .ayuda { margin: 0; }
+.comp-cuerpo textarea {
+  width: 100%; resize: vertical; background: var(--panel-2); border: 1px solid var(--borde); border-radius: var(--radio);
+  padding: 8px 10px; font: 13px/1.4 Consolas, "Cascadia Mono", monospace; word-break: break-all;
+}
+.comp-cuerpo .acciones { margin: 0; }
+.aviso.error { color: var(--peligro); }

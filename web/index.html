@@ -24,7 +24,9 @@
     <div class="constructor">
       <div class="columna-equipo">
         <div class="acciones">
-          <button id="copiar" class="boton">Copiar enlace</button>
+          <button id="exportar" class="boton">Exportar código</button>
+          <button id="importar" class="boton secundario">Importar código</button>
+          <button id="copiar" class="boton secundario">Copiar enlace</button>
           <button id="limpiar" class="boton secundario">Vaciar</button>
           <span id="aviso" class="aviso" aria-live="polite"></span>
         </div>
@@ -72,6 +74,22 @@
     <button class="boton secundario" value="cancelar">Cerrar</button>
   </form>
   <div id="sel-lista" class="sel-lista"></div>
+</dialog>
+
+<dialog id="compartir" class="selector compartir">
+  <form method="dialog" class="selector-cabecera">
+    <h3 id="comp-titulo">Código de la build</h3>
+    <button class="boton secundario" value="cancelar">Cerrar</button>
+  </form>
+  <div class="comp-cuerpo">
+    <p id="comp-ayuda" class="ayuda"></p>
+    <textarea id="comp-codigo" rows="4" spellcheck="false" aria-label="Código de la build"></textarea>
+    <div class="acciones">
+      <button id="comp-copiar" class="boton">Copiar código</button>
+      <button id="comp-cargar" class="boton">Cargar build</button>
+      <span id="comp-aviso" class="aviso" aria-live="polite"></span>
+    </div>
+  </div>
 </dialog>
 
 <footer class="pie">

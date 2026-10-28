@@ -91,6 +91,56 @@ function guardar() {
   history.replaceState(null, '', h.replace(/\|/g, '') ? '#b=' + encodeURIComponent(h) : location.pathname);
 }
 
+// Codigo de build para compartir: "SF162-" + el formato del enlace (codificar) en base64url. No depende de donde este
+// instalada la pagina (el enlace file:///... de un PC no sirve en otro): se pega en "Importar codigo" de cualquier copia.
+const PREFIJO = 'SF162-';
+
+function exportarCodigo() {
+  const bytes = new TextEncoder().encode(codificar());
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return PREFIJO + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Acepta el codigo SF162-..., un enlace con #b=... o el texto del enlace tal cual. Devuelve la build o lanza un error.
+function leerCodigo(entrada) {
+  let t = (entrada || '').trim();
+  const enlace = t.match(/#b=([^\s]*)/);
+  if (enlace) t = decodeURIComponent(enlace[1]);
+  else if (t.toUpperCase().startsWith(PREFIJO)) {
+    const b64 = t.slice(PREFIJO.length).replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    let bin;
+    try { bin = atob(b64 + '='.repeat((4 - b64.length % 4) % 4)); } catch (e) { throw new Error('El código está incompleto o mal copiado.'); }
+    t = new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+  }
+  if (!t.includes('~')) throw new Error('Eso no parece un código de build (empieza por ' + PREFIJO + ').');
+  const b = decodificar(t);
+  if (!RANURAS.some(([r]) => b[r])) throw new Error('El código no contiene ninguna pieza de esta versión.');
+  return b;
+}
+
+function abrirCompartir(modo) {
+  const exportar = modo === 'exportar';
+  const area = $('#comp-codigo');
+  $('#comp-titulo').textContent = exportar ? 'Exportar build' : 'Importar build';
+  $('#comp-ayuda').textContent = exportar
+    ? 'Copia este código y compártelo. Cualquiera puede cargarlo en su Slayer\'s Forge 1.6.2 con «Importar código».'
+    : 'Pega aquí un código de build (' + PREFIJO + '…) o un enlace con #b=…';
+  area.value = exportar ? exportarCodigo() : '';
+  area.readOnly = exportar;
+  $('#comp-copiar').hidden = !exportar;
+  $('#comp-cargar').hidden = exportar;
+  avisoCompartir('');
+  $('#compartir').showModal();
+  if (exportar) area.select(); else area.focus();
+}
+
+function avisoCompartir(texto, error) {
+  const a = $('#comp-aviso');
+  a.textContent = texto;
+  a.classList.toggle('error', !!error);
+}
+
 // ------------------------------------------------------------------------------------------------ totales
 
 function totales(b) {
@@ -522,6 +572,32 @@ function iniciar() {
     setTimeout(() => { $('#aviso').textContent = ''; }, 2500);
   });
   $('#limpiar').addEventListener('click', () => { build = vacio(); pintarConstructor(); });
+  $('#exportar').addEventListener('click', () => {
+    if (!RANURAS.some(([r]) => build[r])) {
+      $('#aviso').textContent = 'Equipa alguna pieza antes de exportar.';
+      setTimeout(() => { $('#aviso').textContent = ''; }, 2500);
+      return;
+    }
+    abrirCompartir('exportar');
+  });
+  $('#importar').addEventListener('click', () => abrirCompartir('importar'));
+  $('#comp-copiar').addEventListener('click', async () => {
+    const area = $('#comp-codigo');
+    try { await navigator.clipboard.writeText(area.value); avisoCompartir('Código copiado.'); }
+    catch (e) { area.select(); document.execCommand('copy'); avisoCompartir('Código copiado.'); }
+  });
+  $('#comp-cargar').addEventListener('click', () => {
+    try {
+      build = leerCodigo($('#comp-codigo').value);
+      $('#compartir').close();
+      mostrar('constructor');
+      pintarConstructor();
+      $('#aviso').textContent = 'Build cargada.';
+      setTimeout(() => { $('#aviso').textContent = ''; }, 2500);
+    } catch (e) {
+      avisoCompartir(e.message, true);
+    }
+  });
   $('#b-arma').append(el('option', {value: ''}, 'Cualquiera'), ...Object.entries(D.armas).map(([k, n]) => el('option', {value: k}, n)));
   $('#b-filtro').addEventListener('input', pintarListaBuscador);
   $('#b-buscar').addEventListener('click', buscar);

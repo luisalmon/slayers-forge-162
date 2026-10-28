@@ -21,7 +21,9 @@ Creador y buscador de builds para Dauntless 1.6.2, en el navegador y sin servido
   - Las armas permiten elegir sus partes: especial y pasiva; en los repetidores, cañón, recámara, empuñadura, prisma y mod.
   - **Armas legendarias** (dos huecos prismáticos y habilidad legendaria): tienen **Unión**. Eliges un arma normal del mismo tipo **y del mismo elemento** (umbrío con umbrío, fuego con fuego…) y la legendaria hereda su ventaja fija y su efecto único, como "Terrores nocturnos" unida a "Ojos de la noche" (+3 Astucia y +50% de daño por debajo del 20% de salud). No hereda sus huecos.
   - A la derecha, el total de cada ventaja (máximo +6, con lo que sobra marcado) y lo que hace a ese rango, más los efectos únicos de las piezas, partes y farol.
-  - **Copiar enlace** guarda la build en la dirección (`#b=…`) para compartirla o abrirla después.
+  - **Exportar código** da un código de build (`SF162-…`) para compartirla con cualquiera: se pega en **Importar código** de cualquier copia de Slayer's Forge 1.6.2, esté donde esté instalada.
+  - **Importar código** acepta ese código o un enlace con `#b=…`.
+  - **Copiar enlace** guarda la build en la dirección (`#b=…`) para abrirla después en tu PC. Como apunta a la carpeta de tu PC, para compartir usa el código.
 - **Buscador**:
   - Eliges las ventajas y el rango que quieres. Busca combinaciones de piezas con células +3 que lleguen a esos rangos.
   - Filtros: tipo de arma, con o sin farol, **incluir armas legendarias** (cada legendaria se prueba unida a cada arma posible) e incluir exóticas.
@@ -74,6 +76,7 @@ web\index.html, app.js, style.css   la página (JavaScript sin dependencias)
   - Límites: 400 combinaciones o 4 segundos.
 
 **Formato del enlace:** `#b=` seguido de las seis ranuras separadas por `|`, cada una como `id~célula,célula~parte,parte[~arma unida]`.
+- **Código de build:** `SF162-` más ese mismo texto en base64url (UTF-8). No lleva datos del juego, solo los identificadores de las piezas, ventajas y partes, así que vale en cualquier copia generada desde Dauntless 1.6.2.
 - Célula: `KW_VENTAJA.rango`, o `-` si el hueco está vacío.
 
 Datos e iconos salen de tu propia instalación y se quedan en esta carpeta. No los redistribuyas.
