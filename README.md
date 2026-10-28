@@ -22,10 +22,10 @@ Creador y buscador de builds para Dauntless 1.6.2, en el navegador y sin servido
   - **Armas legendarias** (dos huecos prismáticos y habilidad legendaria): tienen **Unión**. Eliges un arma normal del mismo tipo **y del mismo elemento** (umbrío con umbrío, fuego con fuego…) y la legendaria hereda su ventaja fija y su efecto único, como "Terrores nocturnos" unida a "Ojos de la noche" (+3 Astucia y +50% de daño por debajo del 20% de salud). No hereda sus huecos.
   - A la derecha, el total de cada ventaja (máximo +6, con lo que sobra marcado) y lo que hace a ese rango, más los efectos únicos de las piezas, partes y farol.
   - **Exportar código** da un código de build (`SF162-…`) para compartirla con cualquiera: se pega en **Importar código** de cualquier copia de Slayer's Forge 1.6.2, esté donde esté instalada.
-  - **Importar código** acepta ese código o un enlace con `#b=…`.
+  - **Importar código** acepta ese código o un enlace con `#b=…`. Descarta lo que no encaje: piezas en otra ranura, células en huecos de otro tipo, partes que no son de esa ranura y uniones no permitidas.
   - **Copiar enlace** guarda la build en la dirección (`#b=…`) para abrirla después en tu PC. Como apunta a la carpeta de tu PC, para compartir usa el código.
 - **Buscador**:
-  - Eliges las ventajas y el rango que quieres. Busca combinaciones de piezas con células +3 que lleguen a esos rangos.
+  - Las ventajas salen en 5 columnas, una por tipo (Potencia, Técnica, Defensa, Movilidad y Utilidad). Un clic la pide a +3, otro a +6 y otro la quita. Busca combinaciones de piezas con células +3 que lleguen a esos rangos.
   - Filtros: tipo de arma, con o sin farol, **incluir armas legendarias** (cada legendaria se prueba unida a cada arma posible) e incluir exóticas.
   - Primero salen las combinaciones con más huecos libres y menos exóticas. Las piezas equivalentes se agrupan; entre paréntesis va cuántas hay.
   - "Abrir en el constructor" carga la build.

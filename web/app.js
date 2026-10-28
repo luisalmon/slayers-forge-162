@@ -70,16 +70,19 @@ function decodificar(texto) {
     if (!t) return;
     const [id, cel = '', par = '', union = ''] = t.split('~');
     const p = PIEZAS[id];
-    if (!p) return;
+    if (!p || p.ranura !== r) return;                       // pieza desconocida o de otra ranura
     const celulas = cel.split(',');
     const partes = par.split(',');
     b[r] = {
       id,
-      celulas: p.huecos.map((_, j) => {
+      celulas: p.huecos.map((t, j) => {
         const [k, rr] = (celulas[j] || '-').split('.');
-        return ventaja(k) ? {k, r: Math.min(MAX_CELULA, Math.max(1, +rr || MAX_CELULA))} : null;
+        const v = ventaja(k);
+        if (!v || (t !== 'Any' && v.tipo !== t)) return null;          // celula de otro tipo: no cabe en ese hueco
+        return {k, r: Math.min(MAX_CELULA, Math.max(1, +rr || MAX_CELULA))};
       }),
-      partes: (p.partes || []).map((s, j) => partes[j] || s.defecto || ''),
+      partes: (p.partes || []).map((s, j) =>
+        partes[j] && (partes[j] === s.defecto || s.opciones.includes(partes[j])) ? partes[j] : s.defecto || ''),
       union: p.union && p.union.includes(union) ? union : '',
     };
   });
@@ -106,7 +109,9 @@ function exportarCodigo() {
 function leerCodigo(entrada) {
   let t = (entrada || '').trim();
   const enlace = t.match(/#b=([^\s]*)/);
-  if (enlace) t = decodeURIComponent(enlace[1]);
+  if (enlace) {
+    try { t = decodeURIComponent(enlace[1]); } catch (e) { throw new Error('El enlace está mal copiado.'); }
+  }
   else if (t.toUpperCase().startsWith(PREFIJO)) {
     const b64 = t.slice(PREFIJO.length).replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
     let bin;
@@ -365,24 +370,43 @@ function abrirSelectorCelula(r, i, tipo) {
 
 const deseo = {};   // ventaja -> rango buscado
 
+// Rangos que se pueden pedir con cada clic: +3 (una celula), +6 (el maximo) y vuelta a nada.
+const PASOS = [3, 6];
+
+function siguienteRango(k) {
+  const v = D.ventajas[k];
+  const pasos = PASOS.filter(n => n <= v.max);
+  const i = pasos.indexOf(deseo[k] || 0);
+  return i + 1 < pasos.length ? pasos[i + 1] : 0;        // 0 -> +3 -> +6 -> 0
+}
+
 function pintarListaBuscador() {
   const q = normal($('#b-filtro').value);
   const cont = $('#b-ventajas');
   cont.replaceChildren();
-  const claves = Object.keys(D.ventajas)
-    .filter(k => !q || normal(D.ventajas[k].nombre).includes(q) || deseo[k])
-    .sort((a, b) => ORDEN_TIPO.indexOf(D.ventajas[a].tipo) - ORDEN_TIPO.indexOf(D.ventajas[b].tipo) ||
-      D.ventajas[a].nombre.localeCompare(D.ventajas[b].nombre));
-  for (const k of claves) {
-    const v = D.ventajas[k];
-    const sel = el('select', {'aria-label': v.nombre, onchange: ev => {
-      const n = +ev.target.value;
-      if (n) deseo[k] = n; else delete deseo[k];
-      ev.target.closest('.fila-ventaja').classList.toggle('activa', !!n);
-    }});
-    for (let n = 0; n <= v.max; n++) sel.append(el('option', {value: n, selected: (deseo[k] || 0) === n}, n ? '+' + n : '—'));
-    cont.append(el('div', {class: `fila-ventaja tipo-${v.tipo} ${deseo[k] ? 'activa' : ''}`, title: (v.rangos[v.max - 1] || []).join('\n')},
-      tipoIcono(v.tipo), el('span', {class: 'nom'}, v.nombre), sel));
+  for (const t of ORDEN_TIPO) {
+    const claves = Object.keys(D.ventajas)
+      .filter(k => D.ventajas[k].tipo === t && (!q || normal(D.ventajas[k].nombre).includes(q) || deseo[k]))
+      .sort((a, b) => D.ventajas[a].nombre.localeCompare(D.ventajas[b].nombre));
+    const elegidas = claves.filter(k => deseo[k]).length;
+    const col = el('section', {class: `columna-tipo tipo-${t}`, 'aria-label': nombreTipo(t)},
+      el('h3', {class: 'cab-tipo'}, tipoIcono(t), nombreTipo(t), elegidas ? el('span', {class: 'cuenta'}, String(elegidas)) : null));
+    for (const k of claves) {
+      const v = D.ventajas[k];
+      const n = deseo[k] || 0;
+      col.append(el('button', {
+        class: `ventaja-btn ${n ? 'activa' : ''}`, type: 'button', 'aria-pressed': n ? 'true' : 'false',
+        title: `${v.nombre}${n ? ' +' + n : ''} · clic: ${siguienteRango(k) ? '+' + siguienteRango(k) : 'quitar'}\n` +
+          (v.rangos[(n || v.max) - 1] || []).join('\n'),
+        onclick: () => {
+          const s = siguienteRango(k);
+          if (s) deseo[k] = s; else delete deseo[k];
+          pintarListaBuscador();
+        }},
+        el('span', {class: 'nom'}, v.nombre), el('span', {class: 'rango-pedido'}, n ? '+' + n : '')));
+    }
+    if (!claves.length) col.append(el('p', {class: 'vacio'}, 'Ninguna coincide.'));
+    cont.append(col);
   }
 }
 
@@ -443,7 +467,7 @@ function buscar() {
       if (p.exotica && !exoticas) continue;
       if (p.union) {
         if (!legendarias) continue;
-        for (const id of p.union) out.push({...p, ventajas: PIEZAS[id].ventajas, unida: PIEZAS[id]});
+        for (const id of p.union) out.push({...p, ventajas: sumar(p.ventajas, PIEZAS[id].ventajas), unida: PIEZAS[id]});
       } else out.push(p);
     }
     return out;
@@ -453,7 +477,6 @@ function buscar() {
 
   const resultados = [];
   const LIMITE = 400, MOSTRAR = 60, t0 = performance.now();
-  const total = objetivo.reduce((s, [, n]) => s + n, 0);
   let cortado = false;
   (function dfs(i, elegido, tengo, huecos) {
     if (resultados.length >= LIMITE || cortado) return;
@@ -481,7 +504,7 @@ function buscar() {
 
   // Mejores primero: mas huecos libres (para otras ventajas), menos exoticas y menos legendarias.
   for (const res of resultados) {
-    const huecos = res.elegido.reduce((s, g) => s + g.piezas[0].huecos.length, 0);
+    const huecos = res.elegido.reduce((s, g) => s + representante(g).huecos.length, 0);
     res.nota = (huecos - res.asignado.length) * 10 - res.elegido.reduce((s, g) => s + [0, 8, 25][especial(g)], 0);
   }
   resultados.sort((a, b) => b.nota - a.nota);
@@ -501,6 +524,18 @@ function especial(g) {
 
 const nombreOpcion = p => p.unida ? `${p.nombre} + ${p.unida.nombre}` : p.nombre;
 
+// Pieza que se muestra de un grupo de equivalentes: la mas normal y, entre ellas, la de mas huecos (mas libres).
+function representante(g) {
+  return g.piezas.slice().sort((a, b) => especial({piezas: [a]}) - especial({piezas: [b]}) ||
+    b.huecos.length - a.huecos.length)[0];
+}
+
+function sumar(a, b) {
+  const t = {...a};
+  for (const [k, n] of Object.entries(b)) t[k] = (t[k] || 0) + n;
+  return t;
+}
+
 function pintarResultado(ranuras, res) {
   // las celulas asignadas se colocan en los huecos de cada pieza, en orden
   const cola = res.asignado.slice();
@@ -508,7 +543,7 @@ function pintarResultado(ranuras, res) {
   const piezas = el('div', {class: 'piezas'});
   ranuras.forEach((r, i) => {
     const g = res.elegido[i];
-    const p = g.piezas.slice().sort((a, b) => especial({piezas: [a]}) - especial({piezas: [b]}))[0];
+    const p = representante(g);
     const celulas = p.huecos.map(t => {
       const j = cola.findIndex(([tt, k]) => tt === t || (t === 'Any' && tt === 'Any'));
       if (j < 0) return null;
@@ -604,7 +639,9 @@ function iniciar() {
   $('#b-limpiar').addEventListener('click', () => { for (const k in deseo) delete deseo[k]; pintarListaBuscador(); $('#b-resultados').replaceChildren(); });
   $('#v-filtro').addEventListener('input', pintarVentajas);
   const m = location.hash.match(/^#b=(.*)$/);
-  if (m) build = decodificar(decodeURIComponent(m[1]));
+  if (m) {
+    try { build = decodificar(decodeURIComponent(m[1])); } catch (e) { build = vacio(); }
+  }
   pintarConstructor();
   pintarListaBuscador();
   pintarVentajas();
