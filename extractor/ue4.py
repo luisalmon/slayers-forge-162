@@ -168,6 +168,26 @@ def exports(b):
     return out
 
 
+def feature_flag_branches(ua, ue):
+    """Ajustes por rama de un FeatureFlag (/Game/Features/*_bpff): {'mainline': True, 'release': False...}, o None si no los
+    tiene. Es la propiedad PerBranchSettings (TMap<EFeatureBranches, bool>) de su objeto por defecto."""
+    nm = names(ua)
+    if 'PerBranchSettings' not in nm:
+        return None
+    o = ue.find(struct.pack('<ii', nm.index('PerBranchSettings'), 0))
+    if o < 0:
+        return None
+    o += 8 + 8 + 4 + 4 + 8 + 8 + 1                     # nombre, MapProperty, tamano, indice, tipos de clave y valor, sin guid
+    _, n = struct.unpack_from('<ii', ue, o)            # claves a quitar, entradas
+    o += 8
+    out = {}
+    for _ in range(n):
+        key, = struct.unpack_from('<i', ue, o)
+        out[nm[key].replace('EFeatureBranches::', '')] = bool(ue[o + 8])
+        o += 9
+    return out
+
+
 NATIVE_STRUCTS = {
     'Vector': '<3f', 'Rotator': '<3f', 'Vector2D': '<2f', 'LinearColor': '<4f', 'Color': '<4B',
     'Guid': '<4I', 'IntPoint': '<2i', 'Quat': '<4f', 'DateTime': '<q', 'Timespan': '<q',

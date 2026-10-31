@@ -195,6 +195,8 @@ select { background: var(--panel-2); border: 1px solid var(--borde); border-radi
 .mini-pieza { width: 128px; font-size: 12px; }
 .mini-pieza img { width: 40px; height: 40px; display: block; }
 .mini-pieza .n { font-weight: 600; }
+.mini-pieza select { width: 100%; margin-top: 3px; padding: 2px 4px; font-size: 11px; }
+.mini-pieza .elemento { display: inline-block; margin-top: 3px; }
 .mini-pieza .c { color: var(--tenue); }
 .mini-pieza .celda {
   display: flex; align-items: center; gap: 4px; margin-top: 3px; padding: 1px 6px 1px 3px;

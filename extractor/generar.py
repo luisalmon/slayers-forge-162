@@ -19,7 +19,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from ue4 import Game, read_locres, decode_texture  # noqa: E402
+from ue4 import Game, feature_flag_branches, read_locres, decode_texture  # noqa: E402
 
 WEB = os.path.normpath(os.path.join(HERE, '..', 'web'))
 JUEGO = r'C:\Games\Dauntless_1.6.2'
@@ -112,6 +112,9 @@ class Generador:
         self.iconos = iconos
         self.hechos = {}                                # ruta de textura -> nombre de png (o None)
         self.n_iconos = 0
+        self.flags = {}                                 # interruptor -> activo en la version publicada
+        self.dadas = None                               # misiones y recompensas, para conseguible()
+        self.omitidas = []                              # piezas que estan en los catalogos pero no en el juego publicado
 
     def t(self, texto):
         """FText -> texto traducido (el original si no hay traduccion)."""
@@ -254,6 +257,32 @@ class Generador:
         return {'nombre': self.t(fila.get('DisplayName')) or pid, 'desc': magnitud(self.t(fila.get('Description')), m),
                 'icono': self.icono_fila(fila, pid), 'ventajas': rangos}
 
+    def publicada(self, fila):
+        """La fila no depende de un interruptor apagado en la version publicada. RequiredFeatureFlag apunta a un FeatureFlag
+        con un valor por rama: glitter_weapons_bpff (las legendarias radiantes y las armaduras «Crono») solo esta en
+        mainline y en compilaciones locales, no en release. Sin ajustes por rama, vale lo de la clase: activo."""
+        flag = fila.get('RequiredFeatureFlag')
+        if not flag:
+            return True
+        nombre = str(flag).rsplit('.', 1)[-1]
+        nombre = nombre[:-2] if nombre.endswith('_C') else nombre
+        if nombre not in self.flags:
+            rel = next(iter(self.g.find(lambda n: n.endswith(f'/{nombre}.uasset'))), None)
+            ramas = feature_flag_branches(self.g.read(rel), self.g.read(rel[:-6] + 'uexp')) if rel else {}
+            self.flags[nombre] = True if ramas is None else bool(ramas.get('release'))
+        return self.flags[nombre]
+
+    def conseguible(self, pid, fila):
+        """Hay alguna forma de tener la pieza: receta, compra, equipo inicial o una mision o recompensa que la de. El set
+        Crystal y el farol LT_TRIALS_00 estan en el catalogo, pero nada los da."""
+        if (fila.get('CraftingRecipesPerLevel') or fila.get('PurchaseRecipesPerLevel') or fila.get('VirtualCurrencyPrices')
+                or 'initial' in (fila.get('Tags') or [])):
+            return True
+        if self.dadas is None:
+            self.dadas = b''.join(self.g.read(n) for n in self.g.find(lambda n: n.endswith(('.uasset', '.uexp')) and (
+                '/Gameplay/quests/' in n or '/Quest_Catalogs/' in n or '/GenericCatalogDataTable.' in n)))
+        return pid.encode() in self.dadas
+
     def valida(self, pid, fila):
         nombre = self.t(fila.get('DisplayName'))
         if fila.get('bCosmeticOnly') or not nombre or nombre.startswith(('[', '~')):
@@ -261,6 +290,10 @@ class Generador:
         if re.search(r'TEST|DEBUG|DONT|BORROWED|PLACEHOLDER|UNEQUIPPED', pid, re.I):
             return None
         if 'BORROWED' in str((fila.get('CellUnlockPattern') or {}).get('RowName')):
+            return None
+        if not self.publicada(fila) or not self.conseguible(pid, fila):
+            if pid not in self.omitidas:
+                self.omitidas.append(pid)
             return None
         return nombre
 
@@ -311,7 +344,7 @@ class Generador:
                         continue
                     if s.get('bHideFromUI'):
                         continue
-                    opciones = [k for k, v in partes_cat.items() if enum(v.get('WeaponPartType')) == tipo]
+                    opciones = [k for k, v in partes_cat.items() if enum(v.get('WeaponPartType')) == tipo and self.publicada(v)]
                     p['partes'].append({'tipo': PARTES.get(tipo.rsplit('_', 1)[-1], tipo), 'clave': tipo,
                                         'defecto': s.get('DefaultWeaponPartID') or '',
                                         'bloqueada': bool(s.get('bIsLocked')), 'opciones': opciones})
@@ -343,6 +376,7 @@ class Generador:
         ventajas = self.ventajas()
         celulas = self.celulas(ventajas)
         piezas, partes = self.piezas(ventajas)
+        self.log(f'  fuera (no estan en el juego publicado): {", ".join(self.omitidas) or "ninguna"}')
         tipos = {}
         for t, nombre in TIPOS_CELULA.items():
             tipos[t] = {'nombre': nombre, 'icono': self.icono('/Game/UI/Textures/Icons/cells/' + ICONOS_TIPO[t],

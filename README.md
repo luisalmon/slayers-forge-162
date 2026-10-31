@@ -37,14 +37,14 @@ Para actualizar la web se regeneran los datos y se copia `web/` (con `datos/` e 
   - **Copiar enlace** guarda la build en la dirección (`#b=…`) para abrirla después en tu PC. Como apunta a la carpeta de tu PC, para compartir usa el código.
 - **Buscador**:
   - Las ventajas salen en 5 columnas, una por tipo (Potencia, Técnica, Defensa, Movilidad y Utilidad). Un clic la pide a +3, otro a +6 y otro la quita. Los resultados se actualizan solos al cambiar las ventajas o los filtros, sin botón de buscar. Busca combinaciones de piezas con células +3 que lleguen a esos rangos.
-  - Filtros: tipo de arma, con o sin farol, armas legendarias e incluir exóticas.
+  - Filtros: tipo de arma, **elemento del arma**, con o sin farol, armas legendarias e incluir exóticas. La unión de una legendaria es de su mismo elemento: con un elemento elegido, solo salen sus armas y sus uniones.
   - **Armas legendarias** (marcada por defecto):
     - Marcada: el arma es siempre una legendaria, unida a un arma de su mismo tipo y elemento que dé alguna de las ventajas pedidas.
     - Si ninguna unión da lo pedido, se usan legendarias con la unión libre y se avisa. Los repetidores no tienen legendarias en 1.6.2.
     - Desmarcada: solo armas normales.
   - **Mostrar descripción** (debajo de la lista, desmarcada por defecto): cada ventaja muestra lo que hace a +3 y a +6.
   - Cada resultado muestra, debajo de cada pieza, la ventaja fija que da (en negrita si es una de las pedidas) y sus huecos (la célula que lleva o "Libre", con el icono y el color de su tipo) y, abajo, las ventajas conseguidas y los huecos libres agrupados por tipo (por ejemplo, Potencia ×3, Técnica ×2).
-  - Se muestran las 60 mejores: más huecos libres, menos exóticas y más rango de sobra en lo pedido. Las piezas equivalentes se agrupan; entre paréntesis va cuántas hay.
+  - Se muestran las 60 mejores: más huecos libres, menos exóticas y más rango de sobra en lo pedido. Las piezas que dan lo mismo se agrupan en un resultado, con un **desplegable** para elegir cuál (por ejemplo, una legendaria de cada elemento); «Abrir en el constructor» carga la elegida.
   - "Abrir en el constructor" carga la build.
 - **Ventajas**: todas las ventajas con lo que hacen en cada rango y qué piezas las dan.
 
@@ -76,13 +76,15 @@ web\index.html, app.js, style.css   la página (JavaScript sin dependencias)
   - Armas: `ElementalType` de `Gameplay/weapon_power_table`.
   - Armaduras: la resistencia positiva de `Gameplay/armour_resistance_table`.
   - Si una pieza no está en esas tablas, se usa el orbe de la receta. No es fiable: las legendarias de hielo copian la receta de Torgadoro, con `ORB_FLAME`. Por eso "Infierno frío" salía de fuego y no se podía unir con "Diente de Pangar".
-- **Textos de StringTable:** los nombres de los sets MINT (hielo) y GLITTER (radiante) y sus legendarias son FText de historia 11 (tabla + clave, como `WP_MS_MINT|Display Name`). Se traducen con el `.locres`. Antes esas 20 piezas se perdían.
+- **Textos de StringTable:** los nombres de los sets MINT (hielo) y sus legendarias son FText de historia 11 (tabla + clave, como `WP_MS_MINT|Display Name`). Se traducen con el `.locres`. Antes esas 20 piezas se perdían.
 - **Partes de arma:** su `PermanentCellsPerLevel` da la magnitud de su efecto, que sustituye a `[MAGNITUDE]` en la descripción (por ejemplo, el prisma gélido de los repetidores: 3000 de daño). En 1.6.2 ninguna parte da ventajas.
-- **Sin icono:** las cuatro armaduras GLITTER, porque su textura no está en los paks de 1.6.2.
 - **Legendarias y exóticas:**
-  - Legendaria = arma con ranura `Weapon_Part_Soul` (la Unión). Se puede unir con las armas del mismo tipo y del mismo elemento que no tengan la etiqueta `notsoulpart`, que no sean legendarias y que no sean exóticas.
+  - Legendaria = arma con ranura `Weapon_Part_Soul` (la Unión). Se puede unir con las armas del mismo tipo y del mismo elemento que no tengan la etiqueta `notsoulpart`, que no sean legendarias y que no sean exóticas. Hay 30: una por tipo de arma (salvo repetidores) y por elemento (fuego, hielo, rayo, tierra y umbral).
   - Exótica = rareza `Legendary` en el catálogo: tres yelmos y La Gula, Decreto Fundido, La Mano Divina y Soles Gemelos.
 - **Qué se omite:**
+  - lo que está en los catálogos pero **no en el juego publicado** (el extractor lo lista al generar):
+    - el conjunto GLITTER: las seis legendarias radiantes («Crisis existencial»…), las cuatro armaduras «Crono» y sus partes. Piden `RequiredFeatureFlag` = `glitter_weapons_bpff`, activo en `mainline` y en compilaciones locales, pero no en `release`. Por eso sus recetas e iconos eran copias de otros conjuntos. En 1.6.2 no hay legendarias radiantes;
+    - las piezas sin receta ni compra que no da ninguna misión ni recompensa: el set Crystal y el farol `LT_TRIALS_00`;
   - piezas cosméticas, de prueba, "UNEQUIPPED" y armas prestadas de eventos (`BORROWED`);
   - variantes de armadura sin ventajas, huecos ni efectos (por ejemplo, `AR_LERAWR_PLAYASKAT_HELM`);
   - el arco, que no salió en esta versión;
