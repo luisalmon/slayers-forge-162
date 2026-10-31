@@ -454,6 +454,7 @@ function buscar() {
   out.replaceChildren();
   if (!objetivo.length) { out.append(el('p', {class: 'vacio'}, 'Elige al menos una ventaja.')); return; }
   const arma = $('#b-arma').value;
+  const elemento = $('#b-elemento').value;
   const exoticas = $('#b-exoticas').checked;
   const legendarias = $('#b-legendarias').checked;
   const conFarol = $('#b-farol').checked;
@@ -474,6 +475,7 @@ function buscar() {
         continue;
       }
       if (arma && p.arma !== arma) continue;
+      if (elemento && p.elemento !== elemento) continue;
       if (legendarias) {
         if (!p.union) continue;
         for (const id of p.union) {
@@ -486,10 +488,13 @@ function buscar() {
     }
     if (r === 'arma' && legendarias && !lista.length) {
       // ninguna union da lo pedido: legendarias con la union libre (sus dos huecos prismaticos siguen sirviendo)
-      for (const p of D.piezas) if (p.ranura === 'arma' && p.union && (!arma || p.arma === arma)) lista.push({...p, unionLibre: true});
+      for (const p of D.piezas) {
+        if (p.ranura === 'arma' && p.union && (!arma || p.arma === arma) && (!elemento || p.elemento === elemento)) lista.push({...p, unionLibre: true});
+      }
+      const deElemento = elemento ? ` de elemento ${elemento}` : '';
       aviso = lista.length
-        ? 'Ninguna unión da las ventajas pedidas: se usan las legendarias con la unión libre.'
-        : `No hay armas legendarias${arma ? ' de ' + D.armas[arma].toLowerCase() : ''} en 1.6.2: desmarca «Armas legendarias».`;
+        ? `Ninguna unión${deElemento} da las ventajas pedidas: se usan las legendarias${deElemento} con la unión libre.`
+        : `No hay armas legendarias${arma ? ' de ' + D.armas[arma].toLowerCase() : ''}${deElemento} en 1.6.2: desmarca «Armas legendarias» o cambia el elemento.`;
     }
     return lista;
   }
@@ -586,7 +591,7 @@ function buscar() {
   out.append(el('p', {class: 'ayuda'}, total
     ? `${total} combinaciones${cortado ? ' (búsqueda cortada a los 4 s: puede haber más; afina los filtros)' : ''}` +
       (total > MOSTRAR ? `; se muestran las ${MOSTRAR} mejores (más huecos libres, menos exóticas)` : '') + '. ' +
-      'Entre paréntesis, cuántas piezas equivalentes hay (pasa el ratón para verlas).'
+      'Donde hay varias piezas que dan lo mismo, eliges cuál en su desplegable.'
     : 'No hay ninguna combinación con esas ventajas' + (cortado ? ' en el tiempo disponible.' : '.')));
   for (const res of mejores.slice(0, MOSTRAR)) out.append(pintarResultado(ranuras, res));
 }
@@ -598,10 +603,15 @@ function especial(g) {
 
 const nombreOpcion = p => p.unida ? `${p.nombre} + ${p.unida.nombre}` : p.unionLibre ? `${p.nombre} (unión libre)` : p.nombre;
 
-// Pieza que se muestra de un grupo de equivalentes: la mas normal y, entre ellas, la de mas huecos (mas libres).
-function representante(g) {
+// Piezas de un grupo de equivalentes, la primera es la que sale de entrada: la mas normal y, entre ellas, la de mas huecos
+// (mas libres).
+function ordenadas(g) {
   return g.piezas.slice().sort((a, b) => especial({piezas: [a]}) - especial({piezas: [b]}) ||
-    b.huecos.length - a.huecos.length)[0];
+    b.huecos.length - a.huecos.length);
+}
+
+function representante(g) {
+  return ordenadas(g)[0];
 }
 
 function sumar(a, b) {
@@ -615,9 +625,11 @@ function pintarResultado(ranuras, res) {
   const cola = res.asignado.slice();
   const b = vacio();
   const piezas = el('div', {class: 'piezas'});
+  res.opcion = res.opcion || {};                  // ranura -> pieza elegida en su desplegable
   ranuras.forEach((r, i) => {
     const g = res.elegido[i];
-    const p = representante(g);
+    const lista = ordenadas(g);
+    const p = lista[res.opcion[i] || 0];
     const celulas = p.huecos.map(t => {
       const j = cola.findIndex(([tt, k]) => tt === t || (t === 'Any' && tt === 'Any'));
       if (j < 0) return null;
@@ -625,8 +637,20 @@ function pintarResultado(ranuras, res) {
       return {k, r: MAX_CELULA};
     });
     b[r] = {id: p.id, celulas, partes: (p.partes || []).map(s => s.defecto || ''), union: p.unida ? p.unida.id : ''};
-    piezas.append(el('div', {class: 'mini-pieza', title: g.piezas.map(nombreOpcion).join('\n')},
-      img(p.icono, p.nombre), el('div', {class: `n rareza-${p.rareza}`}, nombreOpcion(p) + (g.piezas.length > 1 ? ` (${g.piezas.length})` : '')),
+    const desplegable = lista.length > 1
+      ? el('select', {title: 'Piezas que dan lo mismo: elige cuál', onchange: e => {
+        res.opcion[i] = +e.target.value;
+        nodo.replaceWith(pintarResultado(ranuras, res));
+      }}, lista.map((x, j) => {
+        const o = el('option', {value: j}, nombreOpcion(x) + (r === 'arma' && x.elemento ? ` (${x.elemento})` : ''));
+        if (x === p) o.selected = true;
+        return o;
+      }))
+      : null;
+    piezas.append(el('div', {class: 'mini-pieza'},
+      img(p.icono, p.nombre), el('div', {class: `n rareza-${p.rareza}`}, nombreOpcion(p)),
+      r === 'arma' && p.elemento ? el('span', {class: `elemento ${p.elemento}`}, p.elemento) : null,
+      desplegable,
       // lo que da la pieza por si misma (en una legendaria, tambien lo del arma unida); en negrita si se ha pedido
       ...Object.entries(p.ventajas).filter(([k]) => ventaja(k)).map(([k, n]) =>
         el('div', {class: `aporta tipo-${ventaja(k).tipo} ${deseo[k] ? 'pedida' : ''}`, title: 'Ventaja fija de la pieza'},
@@ -650,13 +674,14 @@ function pintarResultado(ranuras, res) {
   const libres = [...ORDEN_TIPO, 'Any'].filter(h => porTipo[h]).map(h =>
     el('span', {class: `chip libre tipo-${h}`, title: `${porTipo[h]} hueco${porTipo[h] > 1 ? 's' : ''} libre${porTipo[h] > 1 ? 's' : ''} de ${nombreTipo(h).toLowerCase()}`},
       tipoIcono(h), `${nombreTipo(h)} ×${porTipo[h]}`));
-  return el('div', {class: 'resultado'}, piezas,
+  const nodo = el('div', {class: 'resultado'}, piezas,
     el('div', {class: 'pie-res'},
       el('div', {class: 'filas-res'},
         el('div', {class: 'lineas'}, el('span', {class: 'etiqueta-res'}, 'Ventajas'), conseguidas),
         el('div', {class: 'lineas'}, el('span', {class: 'etiqueta-res'}, 'Huecos libres'),
           libres.length ? libres : el('span', {class: 'vacio'}, 'ninguno'))),
       el('button', {class: 'boton mini', onclick: () => { build = b; mostrar('constructor'); pintarConstructor(); }}, 'Abrir en el constructor')));
+  return nodo;
 }
 
 // ------------------------------------------------------------------------------------------------ lista de ventajas
@@ -729,14 +754,24 @@ function iniciar() {
     }
   });
   $('#b-arma').append(el('option', {value: ''}, 'Cualquiera'), ...Object.entries(D.armas).map(([k, n]) => el('option', {value: k}, n)));
+  const elementos = [...new Set(D.piezas.filter(p => p.ranura === 'arma' && p.elemento).map(p => p.elemento))].sort();
+  $('#b-elemento').append(el('option', {value: ''}, 'Cualquiera'),
+    ...elementos.map(e => el('option', {value: e}, e[0].toUpperCase() + e.slice(1))));
   $('#b-filtro').addEventListener('input', pintarListaBuscador);
-  for (const id of ['#b-arma', '#b-farol', '#b-legendarias', '#b-exoticas']) $(id).addEventListener('change', programarBusqueda);
+  for (const id of ['#b-arma', '#b-elemento', '#b-farol', '#b-legendarias', '#b-exoticas']) $(id).addEventListener('change', programarBusqueda);
   $('#b-desc').addEventListener('change', pintarListaBuscador);
   $('#b-limpiar').addEventListener('click', () => { for (const k in deseo) delete deseo[k]; pintarListaBuscador(); programarBusqueda(); });
   $('#v-filtro').addEventListener('input', pintarVentajas);
   const m = location.hash.match(/^#b=(.*)$/);
   if (m) {
     try { build = decodificar(decodeURIComponent(m[1])); } catch (e) { build = vacio(); }
+    // Enlaces de antes: piezas que ya no estan porque no existen en el juego publicado (legendarias radiantes, Crystal...)
+    const perdidas = decodeURIComponent(m[1]).split('|').filter((t, i) => t.split('~')[0] && !build[RANURAS[i][0]]).length;
+    if (perdidas) {
+      $('#aviso').textContent = perdidas === 1 ? 'Se quitó 1 pieza que no existe en Dauntless 1.6.2.'
+        : `Se quitaron ${perdidas} piezas que no existen en Dauntless 1.6.2.`;
+      setTimeout(() => { $('#aviso').textContent = ''; }, 8000);
+    }
   }
   pintarConstructor();
   pintarListaBuscador();
